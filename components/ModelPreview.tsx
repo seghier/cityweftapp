@@ -155,6 +155,8 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
   const [timeOfDay, setTimeOfDay] = useState(12); // 12:00 PM default
   const [isSunStudyEnabled, setIsSunStudyEnabled] = useState(false);
   const [showSunControls, setShowSunControls] = useState(false);
+  const [showSolarPath, setShowSolarPath] = useState(false);
+  const solarHelperRef = useRef<THREE.Group | null>(null);
 
   // Climate State
   const [climateData, setClimateData] = useState<{
@@ -236,8 +238,11 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       const currentHourData = climateData.hourly[hourIndex] || climateData.current;
 
       const dirRad = THREE.MathUtils.degToRad(currentHourData.windDirection);
-      const x = -Math.sin(dirRad);
-      const z = -Math.cos(dirRad);
+      // North is +X, South is -X, West is -Z, East is +Z
+      // Wind from North (0°) blows towards South (-X)
+      // Wind from East (90°) blows towards West (-Z)
+      const x = -Math.cos(dirRad);
+      const z = -Math.sin(dirRad);
       const dir = new THREE.Vector3(x, 0, z).normalize();
 
       const box = new THREE.Box3().setFromObject(meshGroupRef.current);
@@ -344,10 +349,11 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
 
     // Spherical to Cartesian relative to scene center
     const r = maxDim * 1.5; // Ensure light is far enough to cast parallel shadows over whole scene
-    // Fix: Negate X because SunCalc azimuth goes West (+), but Three.js +X is East
-    const x = -1 * r * Math.sin(phi) * Math.sin(theta);
+    // X = North-South (+X is North), Z = East-West (+Z is East)
+    // Azimuth 0 is South, positive is West
+    const x = -r * Math.sin(phi) * Math.cos(theta); // South is -X
     const y = r * Math.cos(phi);
-    const z = r * Math.sin(phi) * Math.cos(theta);
+    const z = -r * Math.sin(phi) * Math.sin(theta); // West is -Z
 
     sunLightRef.current.position.set(center.x + x, center.y + y, center.z + z);
     sunLightRef.current.target.position.copy(center);
@@ -396,6 +402,171 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     }
 
   }, [timeOfDay, geometryData, isSunStudyEnabled]);
+
+  // Handle Solar Path Visualization (Arc and Compass)
+  useEffect(() => {
+    if (!sceneRef.current || !meshGroupRef.current) return;
+
+    // Cleanup old helper
+    if (solarHelperRef.current) {
+      sceneRef.current.remove(solarHelperRef.current);
+      solarHelperRef.current.traverse((child: any) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) child.material.forEach((m: any) => m.dispose());
+          else child.material.dispose();
+        }
+      });
+      solarHelperRef.current = null;
+    }
+
+    if (!showSolarPath || !geometryData?.origin) return;
+
+    const [lat, lon] = geometryData.origin;
+    const group = new THREE.Group();
+    const box = new THREE.Box3().setFromObject(meshGroupRef.current);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.z);
+    const radius = maxDim * 1.2;
+
+    // 1. Ground Compass / Grid
+    const compassGroup = new THREE.Group();
+
+    // Circular rings
+    for (let r = 0.5; r <= 1.0; r += 0.25) {
+      const ringGeo = new THREE.RingGeometry(radius * r - 0.5, radius * r + 0.5, 64);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x64748b, side: THREE.DoubleSide, transparent: true, opacity: 0.3 });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = box.min.y;
+      compassGroup.add(ring);
+    }
+
+    // Cardinal Lines (N, S, E, W)
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.5 });
+
+    // N-S Line (Now on X axis)
+    const nsPoints = [new THREE.Vector3(-radius, box.min.y, 0), new THREE.Vector3(radius, box.min.y, 0)];
+    const nsGeo = new THREE.BufferGeometry().setFromPoints(nsPoints);
+    compassGroup.add(new THREE.Line(nsGeo, lineMat));
+
+    // E-W Line (Now on Z axis)
+    const ewPoints = [new THREE.Vector3(0, box.min.y, -radius), new THREE.Vector3(0, box.min.y, radius)];
+    const ewGeo = new THREE.BufferGeometry().setFromPoints(ewPoints);
+    compassGroup.add(new THREE.Line(ewGeo, lineMat));
+
+    // Helper to create text sprite
+    const createTextSprite = (text: string) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Group();
+      canvas.width = 128;
+      canvas.height = 128;
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 80px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 64, 64);
+      const texture = new THREE.CanvasTexture(canvas);
+      const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(radius * 0.2, radius * 0.2, 1);
+      return sprite;
+    };
+
+    // Labels (N, S, E, W) - Flipped 180 and corrected for Map-Up=North
+    const labelPoints = [
+      { pos: [radius * 1.1, 0, 0], label: 'N' },
+      { pos: [-radius * 1.1, 0, 0], label: 'S' },
+      { pos: [0, 0, radius * 1.1], label: 'E' },
+      { pos: [0, 0, -radius * 1.1], label: 'W' }
+    ];
+
+    labelPoints.forEach(p => {
+      const sprite = createTextSprite(p.label);
+      sprite.position.set(p.pos[0], 0, p.pos[2]);
+      compassGroup.add(sprite);
+    });
+
+    compassGroup.position.set(center.x, box.min.y, center.z);
+    group.add(compassGroup);
+
+    // 2. Solar Path (Arc)
+    const pathPoints: THREE.Vector3[] = [];
+    const date = new Date();
+
+    // Sample from 4:00 AM to 8:00 PM
+    for (let h = 4; h <= 20; h += 0.25) {
+      date.setHours(Math.floor(h));
+      date.setMinutes((h % 1) * 60);
+
+      const pos = SunCalc.getPosition(date, lat, lon);
+      if (pos.altitude > -0.1) { // Only points near or above horizon
+        const phi = Math.PI / 2 - pos.altitude;
+        const theta = pos.azimuth;
+
+        // X = North-South (+X is North), Z = East-West (+Z is East)
+        const x = -radius * Math.sin(phi) * Math.cos(theta); // South is -X
+        const y = radius * Math.cos(phi);
+        const z = -radius * Math.sin(phi) * Math.sin(theta); // West is -Z
+
+        pathPoints.push(new THREE.Vector3(center.x + x, box.min.y + y, center.z + z));
+      }
+    }
+
+    if (pathPoints.length > 1) {
+      const pathGeo = new THREE.BufferGeometry().setFromPoints(pathPoints);
+      const pathMat = new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 2, transparent: true, opacity: 0.6 });
+      const pathLine = new THREE.Line(pathGeo, pathMat);
+      group.add(pathLine);
+    }
+
+    // 3. The Sun Ball
+    const sunBallGeo = new THREE.SphereGeometry(radius * 0.05, 32, 32);
+    const sunBallMat = new THREE.MeshStandardMaterial({
+      color: 0xffcc33,
+      emissive: 0xff9900,
+      emissiveIntensity: 1
+    });
+    const sunBall = new THREE.Mesh(sunBallGeo, sunBallMat);
+
+    // Current Sun Position
+    const currentHour = Math.floor(timeOfDay);
+    const currentMin = (timeOfDay % 1) * 60;
+    const curDate = new Date();
+    curDate.setHours(currentHour);
+    curDate.setMinutes(currentMin);
+
+    const curSunPos = SunCalc.getPosition(curDate, lat, lon);
+    const curPhi = Math.PI / 2 - curSunPos.altitude;
+    const curTheta = curSunPos.azimuth;
+
+    const sunX = -radius * Math.sin(curPhi) * Math.cos(curTheta);
+    const sunY = radius * Math.cos(curPhi);
+    const sunZ = -radius * Math.sin(curPhi) * Math.sin(curTheta);
+
+    sunBall.position.set(center.x + sunX, box.min.y + sunY, center.z + sunZ);
+    group.add(sunBall);
+
+    // Add a "light beam" line from sun to center
+    const beamPoints = [new THREE.Vector3(center.x, box.min.y, center.z), sunBall.position.clone()];
+    const beamGeo = new THREE.BufferGeometry().setFromPoints(beamPoints);
+    const beamMat = new THREE.LineDashedMaterial({
+      color: 0xffcc33,
+      dashSize: 2,
+      gapSize: 1,
+      transparent: true,
+      opacity: 0.3
+    });
+    const beam = new THREE.Line(beamGeo, beamMat);
+    beam.computeLineDistances();
+    group.add(beam);
+
+    sceneRef.current.add(group);
+    solarHelperRef.current = group;
+
+  }, [showSolarPath, timeOfDay, geometryData, isSunStudyEnabled]);
 
 
   const generateDefaultPrompt = () => {
@@ -1074,6 +1245,19 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
                         onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
                         className={`w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg hover:[&::-webkit-slider-thumb]:scale-110 transition-all ${isSunStudyEnabled ? '[&::-webkit-slider-thumb]:bg-amber-500' : '[&::-webkit-slider-thumb]:bg-slate-500'}`}
                       />
+
+                      {/* Path Toggle */}
+                      {isSunStudyEnabled && (
+                        <button
+                          onClick={() => setShowSolarPath(!showSolarPath)}
+                          className={`w-full mt-3 flex items-center justify-between p-2 rounded-lg border transition-all ${showSolarPath ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-transparent border-white/5 text-slate-500 hover:text-slate-300'}`}
+                        >
+                          <span className="text-[10px] font-black uppercase tracking-widest">Visualize Path</span>
+                          <div className={`w-8 h-4 rounded-full relative transition-colors ${showSolarPath ? 'bg-amber-500' : 'bg-slate-700'}`}>
+                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${showSolarPath ? 'left-[18px]' : 'left-0.5'}`} />
+                          </div>
+                        </button>
+                      )}
                     </div>
                   </div>
 
