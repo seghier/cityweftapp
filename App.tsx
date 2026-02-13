@@ -10,11 +10,12 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
-  FolderOpen
+  FolderOpen,
+  ExternalLink
 } from 'lucide-react';
 import { AppSettings, ExportFormat, AppStatus, CityweftPayload } from './types';
 import { requestCityweftData, downloadFile, fetchGeometryJson, GeometryResponse } from './services/api';
-import { getDirectoryHandle, saveDirectoryHandle, verifyPermission, saveFileToDirectory, appendToCSV, loadFileFromDirectory, LogEntry } from './services/storage';
+import { getDirectoryHandle, saveDirectoryHandle, verifyPermission, saveFileToDirectory, appendToCSV, loadFileFromDirectory, updateLogWithRender, LogEntry } from './services/storage';
 import MapViewer from './components/MapViewer';
 import ControlPanel from './components/ControlPanel';
 import ModelPreview from './components/ModelPreview';
@@ -57,40 +58,62 @@ const ApiKeyModal: React.FC<{
           {/* Cityweft API Key */}
           <div className="space-y-3">
             <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Cityweft API Key</label>
-            <div className="relative group">
-              <input
-                type={showKey ? "text" : "password"}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="cw_live_..."
-                className="w-full bg-slate-900/50 border border-white/10 rounded-2xl px-6 py-5 text-sm font-mono text-white placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600/50 transition-all"
-              />
-              <button
-                onClick={() => setShowKey(!showKey)}
-                className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-white transition-colors p-1"
+            <div className="flex gap-2">
+              <div className="relative group flex-grow">
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="cw_live_..."
+                  className="w-full bg-slate-900/50 border border-white/10 rounded-2xl px-6 py-5 text-sm font-mono text-white placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600/50 transition-all"
+                />
+                <button
+                  onClick={() => setShowKey(!showKey)}
+                  className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-white transition-colors p-1"
+                >
+                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <a
+                href="https://app.cityweft.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-16 flex items-center justify-center bg-slate-900/50 border border-white/10 rounded-2xl text-slate-400 hover:text-blue-400 hover:border-blue-500/30 hover:bg-blue-500/10 transition-all"
+                title="Get Cityweft API Key"
               >
-                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+                <ExternalLink className="w-5 h-5" />
+              </a>
             </div>
           </div>
 
           {/* NanoBanana API Key */}
           <div className="space-y-3">
             <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Gemini API Key (Optional)</label>
-            <div className="relative group">
-              <input
-                type={showNanoKey ? "text" : "password"}
-                value={nanoBananaApiKey}
-                onChange={(e) => setNanoBananaApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="w-full bg-slate-900/50 border border-white/10 rounded-2xl px-6 py-5 text-sm font-mono text-white placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
-              />
-              <button
-                onClick={() => setShowNanoKey(!showNanoKey)}
-                className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-white transition-colors p-1"
+            <div className="flex gap-2">
+              <div className="relative group flex-grow">
+                <input
+                  type={showNanoKey ? "text" : "password"}
+                  value={nanoBananaApiKey}
+                  onChange={(e) => setNanoBananaApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  className="w-full bg-slate-900/50 border border-white/10 rounded-2xl px-6 py-5 text-sm font-mono text-white placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+                />
+                <button
+                  onClick={() => setShowNanoKey(!showNanoKey)}
+                  className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-white transition-colors p-1"
+                >
+                  {showNanoKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <a
+                href="https://aistudio.google.com/u/2/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-16 flex items-center justify-center bg-slate-900/50 border border-white/10 rounded-2xl text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 transition-all"
+                title="Get Gemini API Key"
               >
-                {showNanoKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+                <ExternalLink className="w-5 h-5" />
+              </a>
             </div>
           </div>
 
@@ -191,6 +214,7 @@ const App: React.FC = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<GeometryResponse | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [previewFileLink, setPreviewFileLink] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<AppSettings>({
     geometry: ['buildings', 'surface', 'infrastructure'],
@@ -303,6 +327,9 @@ const App: React.FC = () => {
       storageFilename = `unnamed_region_${dateStr}.json`;
     }
 
+    // Capture the filename for later use (rendering)
+    setPreviewFileLink(storageFilename);
+
     // Base name for logging
     const safeName = searchQuery
       ? searchQuery.split(',')[0].trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')
@@ -379,41 +406,49 @@ const App: React.FC = () => {
 
       // 2. Save cache and log
       if (downloadHandle) {
-        const hasPerm = await verifyPermission(downloadHandle, true);
-        if (hasPerm) {
-          // Prepare Wrapped JSON with Source Polygon AND Settings
-          const cachePayload = {
-            sourcePolygon: selectedPolygon,
-            settings: {
-              topographyModel: settings.topographyModel,
-              geometry: settings.geometry
-            },
-            data: geometryData,
-            timestamp: Date.now()
-          };
-          const contentStr = JSON.stringify(cachePayload);
+        try {
+          const hasPerm = await verifyPermission(downloadHandle, true);
+          if (hasPerm) {
+            // Prepare Wrapped JSON with Source Polygon AND Settings
+            const cachePayload = {
+              sourcePolygon: selectedPolygon,
+              settings: {
+                topographyModel: settings.topographyModel,
+                geometry: settings.geometry
+              },
+              data: geometryData,
+              timestamp: Date.now()
+            };
+            const contentStr = JSON.stringify(cachePayload);
 
-          // A. Save the unique record (storageFilename)
-          await saveFileToDirectory(downloadHandle, storageFilename, contentStr);
+            // A. Save the unique record (storageFilename)
+            await saveFileToDirectory(downloadHandle, storageFilename, contentStr);
 
-          // B. If unnamed OR named, we update the cache file so we can reload it next time.
-          // Wait, if it IS named (Paris), storageFilename == cacheFilename. So we just save once.
-          // If it is UNNAMED, storageFilename != cacheFilename.
-          if (storageFilename !== cacheFilename) {
-            await saveFileToDirectory(downloadHandle, cacheFilename, contentStr);
+            // B. If unnamed OR named, we update the cache file so we can reload it next time.
+            if (storageFilename !== cacheFilename) {
+              await saveFileToDirectory(downloadHandle, cacheFilename, contentStr);
+            }
+
+            // C. Log the UNIQUE filename to CSV
+            const country = searchQuery ? searchQuery.split(',').pop()?.trim() || 'Unknown' : 'Unknown';
+            const logEntry: LogEntry = {
+              name: safeName,
+              country: country,
+              coordinates: selectedPolygon[0] ? `${selectedPolygon[0][0].toFixed(5)},${selectedPolygon[0][1].toFixed(5)}` : '',
+              area: areaKm2.toFixed(4),
+              fileLink: storageFilename, // Point to the permanent record
+              timestamp: new Date().toISOString()
+            };
+            await appendToCSV(downloadHandle, 'viewed_models.csv', logEntry);
           }
-
-          // C. Log the UNIQUE filename to CSV
-          const country = searchQuery ? searchQuery.split(',').pop()?.trim() || 'Unknown' : 'Unknown';
-          const logEntry: LogEntry = {
-            name: safeName,
-            country: country,
-            coordinates: selectedPolygon[0] ? `${selectedPolygon[0][0].toFixed(5)},${selectedPolygon[0][1].toFixed(5)}` : '',
-            area: areaKm2.toFixed(4),
-            fileLink: storageFilename, // Point to the permanent record
-            timestamp: new Date().toISOString()
-          };
-          await appendToCSV(downloadHandle, 'viewed_models.csv', logEntry);
+        } catch (storageErr: any) {
+          if (storageErr.message === 'HANDLE_INVALIDATED') {
+            console.warn("File System Handle invalidated. Clearing handle.");
+            setDownloadHandle(null);
+            alert("The connection to the saving folder was lost. Please link the folder again.");
+          } else {
+            console.warn("Non-critical storage error during preview cache:", storageErr);
+          }
         }
       }
     } catch (err: any) {
@@ -421,6 +456,43 @@ const App: React.FC = () => {
       setShowPreview(false);
     } finally {
       setIsLoadingPreview(false);
+    }
+  };
+
+  /**
+   * Save the rendered image and update CSV
+   */
+  const handleSaveRender = async (imageUrl: string) => {
+    if (!downloadHandle || !previewFileLink) return;
+
+    try {
+      const hasPerm = await verifyPermission(downloadHandle, true);
+      if (!hasPerm) return;
+
+      // Create 'render' directory
+      const renderDir = await downloadHandle.getDirectoryHandle('render', { create: true });
+
+      // Generate filename
+      const baseName = previewFileLink.replace('.json', '');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `${baseName}_render_${timestamp}.png`;
+
+      // Convert data URL to Blob
+      const res = await fetch(imageUrl);
+      const blob = await res.blob();
+
+      // Save
+      await saveFileToDirectory(renderDir, filename, blob);
+
+      // Update CSV
+      const relativePath = `render/${filename}`;
+      await updateLogWithRender(downloadHandle, 'viewed_models.csv', previewFileLink, relativePath);
+
+      console.log("Render saved automatically to", relativePath);
+
+    } catch (e) {
+      console.error("Failed to save render automatically", e);
+      setErrorMessage("Failed to save render automatically.");
     }
   };
 
@@ -550,6 +622,11 @@ const App: React.FC = () => {
 
       setPreviewData(data);
       setShowPreview(true);
+      // For uploaded files, we can't easily associate back to CSV unless we track filename or something,
+      // but users request is about previews generated.
+      // If we want to support this for uploads:
+      setPreviewFileLink(file.name);
+
     } catch (e) {
       console.error("File upload failed:", e);
       setErrorMessage("Failed to load file. Please ensure it is a valid Cityweft JSON preview.");
@@ -650,6 +727,7 @@ const App: React.FC = () => {
         isLoading={isLoadingPreview}
         nanoBananaApiKey={nanoBananaApiKey}
         locationName={searchQuery}
+        onRenderComplete={handleSaveRender}
       />
 
       <main className="flex-grow relative h-full">

@@ -45,6 +45,7 @@ interface ModelPreviewProps {
   isLoading?: boolean;
   nanoBananaApiKey?: string;
   locationName?: string;
+  onRenderComplete?: (imageUrl: string) => void;
 }
 
 const COLORS = {
@@ -89,7 +90,8 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
   onConfirmDownload,
   isLoading = false,
   nanoBananaApiKey,
-  locationName
+  locationName,
+  onRenderComplete
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -116,6 +118,7 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
   const [promptOverride, setPromptOverride] = useState<string>("");
   const [tempPrompt, setTempPrompt] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-3-pro-image-preview');
+  const [renderQuality, setRenderQuality] = useState<'1K' | '2K' | '4K'>('1K');
 
   // Layer Control State
   const [showLayers, setShowLayers] = useState(true);
@@ -154,6 +157,7 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
   // Sun Study State
   const [timeOfDay, setTimeOfDay] = useState(12); // 12:00 PM default
   const [isSunStudyEnabled, setIsSunStudyEnabled] = useState(false);
+  const [showDefaultShadows, setShowDefaultShadows] = useState(true);
   const [showSunControls, setShowSunControls] = useState(false);
   const [showSolarPath, setShowSolarPath] = useState(false);
   const solarHelperRef = useRef<THREE.Group | null>(null);
@@ -221,11 +225,18 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       sceneRef.current.remove(windHelperRef.current);
       // specific cleanup for meshes/materials if needed, but Group remove is usually enough for simple helpers
       // ArrowHelper creates geometry/materials, ideally we dispose them
-      windHelperRef.current.traverse((child) => {
+      windHelperRef.current.traverse((child: any) => {
         if (child instanceof THREE.ArrowHelper) {
           child.line.geometry.dispose();
           child.cone.geometry.dispose();
-          // ArrowHelper materials are shared or simple, but good practice to check
+          if (child.line.material) {
+            if (Array.isArray(child.line.material)) child.line.material.forEach((m: any) => m.dispose());
+            else child.line.material.dispose();
+          }
+          if (child.cone.material) {
+            if (Array.isArray(child.cone.material)) child.cone.material.forEach((m: any) => m.dispose());
+            else child.cone.material.dispose();
+          }
         }
       });
       windHelperRef.current = null;
@@ -242,10 +253,11 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       const currentHourData = climateData.hourly[hourIndex] || climateData.current;
 
       const dirRad = THREE.MathUtils.degToRad(currentHourData.windDirection);
-      // North is +X, East is +Z. Wind angle is CW from North.
-      // Arrow points TOWARDS the destination.
-      const x = Math.cos(dirRad);
-      const z = Math.sin(dirRad);
+      // North is -Z, East is +X. Wind direction is deg clockwise from North.
+      // 0 = North (-Z) -> x=0, z=-1
+      // 90 = East (+X) -> x=1, z=0
+      const x = Math.sin(dirRad);
+      const z = -Math.cos(dirRad);
       const dir = new THREE.Vector3(x, 0, z).normalize();
 
       const box = new THREE.Box3().setFromObject(meshGroupRef.current);
@@ -303,6 +315,9 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       sunLightRef.current.target.position.copy(center);
       sunLightRef.current.target.updateMatrixWorld();
 
+      // Control Shadow Casting for Default Light
+      sunLightRef.current.castShadow = showDefaultShadows;
+
       // Reset shadow camera to cover everything (optional, but good for consistency)
       const camSize = maxDim * 0.8;
       sunLightRef.current.shadow.camera.left = -camSize;
@@ -327,8 +342,17 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
           sceneRef.current.background = texture;
         }
       }
+
+      // Force shadow update if needed
+      if (rendererRef.current) {
+        rendererRef.current.shadowMap.needsUpdate = true;
+      }
+
       return;
     }
+
+    // Force shadows ON when Sun Study is active (it implies shadows)
+    sunLightRef.current.castShadow = true;
 
     if (!geometryData?.origin) return;
 
@@ -352,11 +376,12 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
 
     // Spherical to Cartesian relative to scene center
     const r = maxDim * 1.5;
-    // South is -X, West is -Z, North is +X, East is +Z.
+    // South is +Z, West is -X, North is -Z, East is +X. (Standard Map Orientation)
     // SunCalc: 0=S, PI/2=W, PI=N
-    const x = -r * Math.sin(phi) * Math.cos(theta);
+    // We want 0 -> +Z, PI/2 -> -X
+    const x = -r * Math.sin(phi) * Math.sin(theta);
     const y = r * Math.cos(phi);
-    const z = -r * Math.sin(phi) * Math.sin(theta);
+    const z = r * Math.sin(phi) * Math.cos(theta);
 
     sunLightRef.current.position.set(center.x + x, center.y + y, center.z + z);
     sunLightRef.current.target.position.copy(center);
@@ -404,13 +429,13 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       }
     }
 
-  }, [timeOfDay, geometryData, isSunStudyEnabled, sceneGeneration]);
+  }, [timeOfDay, geometryData, isSunStudyEnabled, sceneGeneration, showDefaultShadows]);
 
   // Handle Solar Path Visualization (Arc and Compass)
   useEffect(() => {
     if (!sceneRef.current || !meshGroupRef.current) return;
 
-    // Cleanup old helper
+    // Cleanup old helper always first
     if (solarHelperRef.current) {
       sceneRef.current.remove(solarHelperRef.current);
       solarHelperRef.current.traverse((child: any) => {
@@ -423,6 +448,10 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       solarHelperRef.current = null;
     }
 
+    // If sun study is disabled, stop here (having cleaned up)
+    if (!isSunStudyEnabled) return;
+
+    // Only proceed if showSolarPath is ALSO true (and sun study is enabled)
     if (!showSolarPath || !geometryData?.origin) return;
 
     const [lat, lon] = geometryData.origin;
@@ -449,13 +478,13 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     // Cardinal Lines (N, S, E, W)
     const lineMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.5 });
 
-    // N-S Line (Now on X axis)
-    const nsPoints = [new THREE.Vector3(-radius, box.min.y, 0), new THREE.Vector3(radius, box.min.y, 0)];
+    // N-S Line (Now on Z axis)
+    const nsPoints = [new THREE.Vector3(0, box.min.y, -radius), new THREE.Vector3(0, box.min.y, radius)];
     const nsGeo = new THREE.BufferGeometry().setFromPoints(nsPoints);
     compassGroup.add(new THREE.Line(nsGeo, lineMat));
 
-    // E-W Line (Now on Z axis)
-    const ewPoints = [new THREE.Vector3(0, box.min.y, -radius), new THREE.Vector3(0, box.min.y, radius)];
+    // E-W Line (Now on X axis)
+    const ewPoints = [new THREE.Vector3(-radius, box.min.y, 0), new THREE.Vector3(radius, box.min.y, 0)];
     const ewGeo = new THREE.BufferGeometry().setFromPoints(ewPoints);
     compassGroup.add(new THREE.Line(ewGeo, lineMat));
 
@@ -478,12 +507,12 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       return sprite;
     };
 
-    // Labels (N, S, E, W) - Flipped 180 and corrected for Map-Up=North
+    // Labels (N, S, E, W) - Corrected for Map-Up=North (-Z)
     const labelPoints = [
-      { pos: [radius * 1.1, 0, 0], label: 'N' },
-      { pos: [-radius * 1.1, 0, 0], label: 'S' },
-      { pos: [0, 0, radius * 1.1], label: 'E' },
-      { pos: [0, 0, -radius * 1.1], label: 'W' }
+      { pos: [0, 0, -radius * 1.1], label: 'N' },
+      { pos: [0, 0, radius * 1.1], label: 'S' },
+      { pos: [radius * 1.1, 0, 0], label: 'E' },
+      { pos: [-radius * 1.1, 0, 0], label: 'W' }
     ];
 
     labelPoints.forEach(p => {
@@ -509,10 +538,11 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
         const phi = Math.PI / 2 - pos.altitude;
         const theta = pos.azimuth;
 
-        // X = North-South (+X is North), Z = East-West (+Z is East) (Azimuth 0 is South, West is PI/2)
-        const x = -radius * Math.sin(phi) * Math.cos(theta); // South (0) -> -X
+        // X = East-West, Z = North-South
+        // South (0) -> +Z, West (PI/2) -> -X
+        const x = -radius * Math.sin(phi) * Math.sin(theta);
         const y = radius * Math.cos(phi);
-        const z = -radius * Math.sin(phi) * Math.sin(theta); // West (PI/2) -> -Z
+        const z = radius * Math.sin(phi) * Math.cos(theta);
 
         pathPoints.push(new THREE.Vector3(center.x + x, box.min.y + y, center.z + z));
       }
@@ -545,10 +575,10 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     const curPhi = Math.PI / 2 - curSunPos.altitude;
     const curTheta = curSunPos.azimuth;
 
-    // South is -X, West is -Z, North is +X, East is +Z.
-    const sunX = -radius * Math.sin(curPhi) * Math.cos(curTheta);
+    // South is +Z, West is -X
+    const sunX = -radius * Math.sin(curPhi) * Math.sin(curTheta);
     const sunY = radius * Math.cos(curPhi);
-    const sunZ = -radius * Math.sin(curPhi) * Math.sin(curTheta);
+    const sunZ = radius * Math.sin(curPhi) * Math.cos(curTheta);
 
     sunBall.position.set(center.x + sunX, box.min.y + sunY, center.z + sunZ);
     group.add(sunBall);
@@ -597,6 +627,147 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     setShowPromptEditor(false);
   };
 
+  // Map Underlay State
+  const [showMapUnderlay, setShowMapUnderlay] = useState(false);
+  const mapGroupRef = useRef<THREE.Group | null>(null);
+
+  // Handle Map Underlay
+  useEffect(() => {
+    if (!sceneRef.current || !meshGroupRef.current || !geometryData?.origin) return;
+
+    // Cleanup
+    if (mapGroupRef.current) {
+      sceneRef.current.remove(mapGroupRef.current);
+      mapGroupRef.current.traverse((child: any) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (child.material.map) child.material.map.dispose();
+          child.material.dispose();
+        }
+      });
+      mapGroupRef.current = null;
+    }
+
+    if (showMapUnderlay) {
+      const [lat, lon] = geometryData.origin;
+      const group = new THREE.Group();
+
+      const box = new THREE.Box3().setFromObject(meshGroupRef.current);
+      if (box.isEmpty()) return; // Safety check
+
+      const groundY = box.min.y - 0.5; // Slightly below lowest point
+
+      const sizeX = box.max.x - box.min.x;
+      const sizeZ = box.max.z - box.min.z;
+      const maxDim = Math.max(sizeX, sizeZ);
+
+      // Dynamic Zoom Calculation
+      // We want the total grid to be manageable (e.g. ~8-12 tiles wide)
+      // Tile size in pixels = 256
+      // Meters per pixel ~ 156543 / 2^zoom * cos(lat)
+      // TileMeters = Meters/Pixel * 256
+
+      const EARTH_CIRCUMFERENCE = 40075016.686;
+      const latRad = lat * Math.PI / 180;
+      const cosLat = Math.cos(latRad);
+
+      // Find zoom where maxDim fits in roughly 10 tiles (less aggressive zoom to avoid huge tile counts)
+      // tileMeters * 10 approx maxDim
+      let targetZoom = Math.floor(Math.log2((10 * 256 * EARTH_CIRCUMFERENCE * cosLat) / (maxDim || 100)) - 8);
+      // Clamp zoom to reasonable web map levels (15-19)
+      const zoom = Math.max(15, Math.min(19, targetZoom));
+
+      const metersPerPixel = (EARTH_CIRCUMFERENCE * cosLat) / Math.pow(2, zoom + 8);
+      const tileMeters = metersPerPixel * 256;
+
+      // Coordinate conversion
+      const n = Math.pow(2, zoom);
+      const xTileFloat = n * ((lon + 180) / 360);
+      const yTileFloat = n * (1 - (Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI)) / 2;
+
+      // Pixel position of the Center Point (lon, lat) within the world map at this zoom
+      const centerPixelX = xTileFloat * 256;
+      const centerPixelY = yTileFloat * 256;
+
+      // Helper: Convert World Position (meters relative to model origin) to Absolute Tile Index
+      // World X is East (+), Pixel X is East (+)
+      // World Z is South (+), Pixel Y is South (+)
+      const getTileIndexX = (worldX: number) => Math.floor((centerPixelX + (worldX / metersPerPixel)) / 256);
+      const getTileIndexY = (worldZ: number) => Math.floor((centerPixelY + (worldZ / metersPerPixel)) / 256);
+
+      // Calculate range of tiles needed to cover the box
+      const minTx = getTileIndexX(box.min.x);
+      const maxTx = getTileIndexX(box.max.x);
+      const minTy = getTileIndexY(box.min.z);
+      const maxTy = getTileIndexY(box.max.z);
+
+      // Add generous padding
+      const pad = 3;
+
+      // Safety check
+      const tileCount = (maxTx - minTx + 1 + 2 * pad) * (maxTy - minTy + 1 + 2 * pad);
+      if (tileCount > 300) {
+        console.warn(`Many map tiles requested (${tileCount}), performance may be impacted.`);
+      }
+
+      const loader = new THREE.TextureLoader();
+      loader.crossOrigin = 'anonymous';
+
+      // Load tiles based on absolute indices
+      let loadedCount = 0;
+      for (let tx = minTx - pad; tx <= maxTx + pad; tx++) {
+        for (let ty = minTy - pad; ty <= maxTy + pad; ty++) {
+          if (loadedCount >= 300) break; // Hard cap increased
+          loadedCount++;
+
+          const url = `https://a.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tx}/${ty}.png`;
+
+          const texture = loader.load(url);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.minFilter = THREE.LinearFilter;
+          texture.magFilter = THREE.LinearFilter;
+          texture.wrapS = THREE.ClampToEdgeWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
+
+          const maxAnisotropy = rendererRef.current?.capabilities.getMaxAnisotropy() || 4;
+          texture.anisotropy = Math.min(16, maxAnisotropy);
+
+          const geometry = new THREE.PlaneGeometry(tileMeters, tileMeters);
+          const material = new THREE.MeshStandardMaterial({
+            map: texture,
+            roughness: 1,
+            metalness: 0,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.9
+          });
+
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.receiveShadow = true;
+
+          // Position in World Space
+          // Tile's top-left pixel coord = tx * 256
+          // Tile's center pixel coord = tx * 256 + 128
+          // Offset from Center Point (pixels) = (tx * 256 + 128) - centerPixelX
+          // Convert to meters: * metersPerPixel
+
+          const tileCenterPixelX = tx * 256 + 128;
+          const tileCenterPixelY = ty * 256 + 128;
+
+          const worldX = (tileCenterPixelX - centerPixelX) * metersPerPixel;
+          const worldZ = (tileCenterPixelY - centerPixelY) * metersPerPixel;
+
+          mesh.position.set(worldX, groundY, worldZ);
+          group.add(mesh);
+        }
+      }
+
+      sceneRef.current.add(group);
+      mapGroupRef.current = group;
+    }
+  }, [showMapUnderlay, geometryData, sceneGeneration]);
+
   const handleSliderMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!sliderRef.current) return;
     const rect = sliderRef.current.getBoundingClientRect();
@@ -614,6 +785,13 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     setActiveTab('render');
 
     try {
+      // Hide Helpers for clean capture
+      const wasSolarVisible = solarHelperRef.current?.visible;
+      const wasWindVisible = windHelperRef.current?.visible;
+
+      if (solarHelperRef.current) solarHelperRef.current.visible = false;
+      if (windHelperRef.current) windHelperRef.current.visible = false;
+
       // Capture current view at high resolution (1376x768)
       // Store original size and aspect
       const originalSize = new THREE.Vector2();
@@ -643,6 +821,11 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
         cameraRef.current.aspect = originalAspect;
         cameraRef.current.updateProjectionMatrix();
       }
+
+      // Restore Helpers
+      if (solarHelperRef.current && wasSolarVisible !== undefined) solarHelperRef.current.visible = wasSolarVisible;
+      if (windHelperRef.current && wasWindVisible !== undefined) windHelperRef.current.visible = wasWindVisible;
+
       if (sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
       }
@@ -654,12 +837,17 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       // Construct Smart Prompt
       const smartPrompt = promptOverride || generateDefaultPrompt();
 
-      console.log(`Generating render with prompt (${selectedModel}):`, smartPrompt);
+      const qualityToUse = selectedModel === 'gemini-3-pro-image-preview' ? renderQuality : '1K';
 
-      const result = await generateRender(blob, smartPrompt, nanoBananaApiKey, selectedModel);
+      console.log(`Generating render with prompt (${selectedModel}, ${qualityToUse}):`, smartPrompt);
+
+      const result = await generateRender(blob, smartPrompt, nanoBananaApiKey, selectedModel, qualityToUse);
 
       if (result.status === 'success') {
         setRenderedImageUrl(result.imageUrl);
+        if (onRenderComplete) {
+          onRenderComplete(result.imageUrl);
+        }
       } else {
         setRenderError(result.error || "Rendering failed");
       }
@@ -751,6 +939,8 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
 
     // Process geometry
     const meshGroup = new THREE.Group();
+    // Rotate 90 degrees to align North (+X in data) to -Z (Standard Map North)
+    meshGroup.rotation.y = Math.PI / 2;
     meshGroupRef.current = meshGroup;
 
     // Create separate groups for layers
@@ -1156,8 +1346,8 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
             {/* 3D Canvas is appended here by existing useEffect */}
 
             {/* Layer Control Panel */}
-            <div className={`absolute left-6 top-6 transition-all duration-300 z-10 flex gap-2 pointer-events-none ${showLayers ? 'translate-x-0' : '-translate-x-[calc(100%-40px)]'}`}>
-              <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-xl transition-all pointer-events-auto flex flex-col ${showLayers ? 'w-64 h-[60vh] p-4' : 'w-0 h-0 p-0 opacity-0 overflow-hidden'}`}>
+            <div className={`absolute left-6 top-6 bottom-6 items-start transition-all duration-300 z-10 flex gap-2 pointer-events-none ${showLayers ? 'translate-x-0' : '-translate-x-[calc(100%-40px)]'}`}>
+              <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-xl transition-all pointer-events-auto flex flex-col ${showLayers ? 'w-64 h-full p-4' : 'w-0 h-0 p-0 opacity-0 overflow-hidden'}`}>
                 <div className="flex items-center gap-2 mb-2 text-slate-400 pb-3 border-b border-white/5 shrink-0">
                   <Layers className="w-4 h-4" />
                   <span className="text-xs font-black uppercase tracking-widest">Scene Layers</span>
@@ -1234,8 +1424,39 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
                   })}
                 </div>
 
-                {/* Fixed Footer Controls (Sun & Climate) */}
+                {/* Fixed Footer Controls (Map, Sun & Climate) */}
                 <div className="border-t border-white/5 bg-slate-900/50 backdrop-blur-sm -mx-4 px-4 pb-4 pt-2 mt-2 shrink-0">
+
+                  {/* Default Shadows Toggle (Only visible when Sun Study is OFF) */}
+                  {!isSunStudyEnabled && (
+                    <div className="mt-2 pt-2">
+                      <button
+                        onClick={() => setShowDefaultShadows(!showDefaultShadows)}
+                        className={`w-full flex items-center justify-between p-2 rounded-lg transition-all mb-1 ${showDefaultShadows ? 'bg-slate-700/50 text-slate-200' : 'bg-transparent text-slate-500 hover:text-slate-400 hover:bg-white/5'}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Box className="w-4 h-4" />
+                          <span className="text-xs font-black uppercase tracking-widest">Default Shadows</span>
+                        </div>
+                        {showDefaultShadows ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Map Underlay Control */}
+                  <div className="mt-2 pt-2">
+                    <button
+                      onClick={() => setShowMapUnderlay(!showMapUnderlay)}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg transition-all mb-4 ${showMapUnderlay ? 'bg-indigo-600/20 text-indigo-200' : 'bg-transparent text-slate-400 hover:text-slate-300 hover:bg-white/5'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <ImageIcon className="w-4 h-4" />
+                        <span className="text-xs font-black uppercase tracking-widest">Map Underlay</span>
+                      </div>
+                      {showMapUnderlay ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
                   {/* Sun Study Control */}
                   <div className="mt-2 pt-2">
                     <button
@@ -1542,7 +1763,7 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
           <div className="flex items-center gap-4">
             {/* Model Choice & Render - Moved to Footer, only show in 3D tab or Render tab if needed */}
             {nanoBananaApiKey && (
-              <div className="flex gap-2 shadow-lg rounded-xl">
+              <div className="flex shadow-lg rounded-xl">
                 <div className="relative group">
                   <select
                     value={selectedModel}
@@ -1555,6 +1776,23 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
                   </select>
                   <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 </div>
+
+                {/* Quality Selector - Only for Gemini 3 Pro */}
+                {selectedModel === 'gemini-3-pro-image-preview' && (
+                  <div className="relative group border-y border-l border-white/10">
+                    <select
+                      value={renderQuality}
+                      onChange={(e) => setRenderQuality(e.target.value as any)}
+                      className="appearance-none bg-slate-900/80 backdrop-blur-md pl-3 pr-8 py-3 outline-none text-white font-bold text-xs hover:bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer h-full"
+                      title="Select Render Quality"
+                    >
+                      <option value="1K" className="bg-slate-900 text-white">1K</option>
+                      <option value="2K" className="bg-slate-900 text-white">2K</option>
+                      <option value="4K" className="bg-slate-900 text-white">4K</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                  </div>
+                )}
 
                 <button
                   onClick={handleRender}

@@ -291,7 +291,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
 
         {/* Action Footer */}
-        <div className="p-10 bg-[#020617] border-t border-white/5 space-y-8">
+        <div className="px-10 py-6 bg-[#020617] border-t border-white/5 space-y-4">
           <div className="flex justify-between items-end px-2">
             <div className="space-y-2">
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">Selection Scope</p>

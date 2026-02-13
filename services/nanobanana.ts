@@ -14,7 +14,8 @@ export async function generateRender(
     imageBlob: Blob,
     prompt: string,
     apiKey: string,
-    model: GeminiModel = 'gemini-3-pro-image-preview'
+    model: GeminiModel = 'gemini-3-pro-image-preview',
+    quality: '1K' | '2K' | '4K' = '1K'
 ): Promise<RenderResponse> {
 
     // Choose model based on input
@@ -52,7 +53,7 @@ export async function generateRender(
             generationConfig: {
                 responseModalities: ["IMAGE"],
                 imageConfig: {
-                    imageSize: "1K"
+                    imageSize: quality
                 }
             }
         };
