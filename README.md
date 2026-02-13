@@ -257,8 +257,4 @@ Potential additions:
 
 ## 📄 License
 
-Same as original Cityweft application.
-
----
-
-**Built with ❤️ by the Cityweft team**
+For commercial use contact me
