@@ -242,11 +242,10 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       const currentHourData = climateData.hourly[hourIndex] || climateData.current;
 
       const dirRad = THREE.MathUtils.degToRad(currentHourData.windDirection);
-      // North is +X, South is -X, West is -Z, East is +Z
-      // Wind from North (0°) blows towards South (-X)
-      // Wind from East (90°) blows towards West (-Z)
-      const x = -Math.cos(dirRad);
-      const z = -Math.sin(dirRad);
+      // North is +X, East is +Z. Wind angle is CW from North.
+      // Arrow points TOWARDS the destination.
+      const x = Math.cos(dirRad);
+      const z = Math.sin(dirRad);
       const dir = new THREE.Vector3(x, 0, z).normalize();
 
       const box = new THREE.Box3().setFromObject(meshGroupRef.current);
@@ -352,12 +351,12 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     const maxDim = Math.max(size.x, size.y, size.z);
 
     // Spherical to Cartesian relative to scene center
-    const r = maxDim * 1.5; // Ensure light is far enough to cast parallel shadows over whole scene
-    // X = North-South (+X is North), Z = East-West (+Z is East)
-    // Azimuth 0 is South, positive is West
-    const x = -r * Math.sin(phi) * Math.cos(theta); // South is -X
+    const r = maxDim * 1.5;
+    // South is -X, West is -Z, North is +X, East is +Z.
+    // SunCalc: 0=S, PI/2=W, PI=N
+    const x = -r * Math.sin(phi) * Math.cos(theta);
     const y = r * Math.cos(phi);
-    const z = -r * Math.sin(phi) * Math.sin(theta); // West is -Z
+    const z = -r * Math.sin(phi) * Math.sin(theta);
 
     sunLightRef.current.position.set(center.x + x, center.y + y, center.z + z);
     sunLightRef.current.target.position.copy(center);
@@ -510,10 +509,10 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
         const phi = Math.PI / 2 - pos.altitude;
         const theta = pos.azimuth;
 
-        // X = North-South (+X is North), Z = East-West (+Z is East)
-        const x = -radius * Math.sin(phi) * Math.cos(theta); // South is -X
+        // X = North-South (+X is North), Z = East-West (+Z is East) (Azimuth 0 is South, West is PI/2)
+        const x = -radius * Math.sin(phi) * Math.cos(theta); // South (0) -> -X
         const y = radius * Math.cos(phi);
-        const z = -radius * Math.sin(phi) * Math.sin(theta); // West is -Z
+        const z = -radius * Math.sin(phi) * Math.sin(theta); // West (PI/2) -> -Z
 
         pathPoints.push(new THREE.Vector3(center.x + x, box.min.y + y, center.z + z));
       }
@@ -546,6 +545,7 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     const curPhi = Math.PI / 2 - curSunPos.altitude;
     const curTheta = curSunPos.azimuth;
 
+    // South is -X, West is -Z, North is +X, East is +Z.
     const sunX = -radius * Math.sin(curPhi) * Math.cos(curTheta);
     const sunY = radius * Math.cos(curPhi);
     const sunZ = -radius * Math.sin(curPhi) * Math.sin(curTheta);
