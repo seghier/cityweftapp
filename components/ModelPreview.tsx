@@ -166,10 +166,14 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
 
   const [isClimateEnabled, setIsClimateEnabled] = useState(false);
   const windHelperRef = useRef<THREE.Group | null>(null);
+  const [sceneGeneration, setSceneGeneration] = useState(0);
 
   useEffect(() => {
-    // Reset prompt override when geometry data changes
+    // Reset analysis states when geometry data changes
     setPromptOverride("");
+    setIsSunStudyEnabled(false);
+    setShowSolarPath(false);
+    setIsClimateEnabled(false);
   }, [geometryData]);
 
   // Update Grid/Layer Visibility
@@ -282,7 +286,7 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       windHelperRef.current = group;
     }
 
-  }, [isClimateEnabled, climateData, timeOfDay]);
+  }, [isClimateEnabled, climateData, timeOfDay, sceneGeneration]);
 
   // Handle Sun Position Updates
   useEffect(() => {
@@ -401,7 +405,7 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       }
     }
 
-  }, [timeOfDay, geometryData, isSunStudyEnabled]);
+  }, [timeOfDay, geometryData, isSunStudyEnabled, sceneGeneration]);
 
   // Handle Solar Path Visualization (Arc and Compass)
   useEffect(() => {
@@ -566,7 +570,7 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     sceneRef.current.add(group);
     solarHelperRef.current = group;
 
-  }, [showSolarPath, timeOfDay, geometryData, isSunStudyEnabled]);
+  }, [showSolarPath, timeOfDay, geometryData, isSunStudyEnabled, sceneGeneration]);
 
 
   const generateDefaultPrompt = () => {
@@ -688,6 +692,7 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       scene.background = new THREE.Color(0xe0f2fe);
     }
     sceneRef.current = scene;
+    setSceneGeneration(g => g + 1);
 
     // Camera setup
     const camera = new THREE.PerspectiveCamera(
