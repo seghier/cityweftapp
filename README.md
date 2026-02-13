@@ -57,7 +57,6 @@ updated_app/
 ## 🚀 Installation
 
 ```bash
-cd updated_app
 npm install
 npm run dev
 ```
