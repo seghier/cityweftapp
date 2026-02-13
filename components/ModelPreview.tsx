@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/addons/controls/OrbitControls';
 import {
   X, RotateCcw, Eye, Download, Loader2, Image as ImageIcon,
   Box, Edit2, Check, ChevronDown, Layers, ChevronLeft, EyeOff, Sun, ChevronRight, Wind, Thermometer, Compass
@@ -1025,7 +1025,21 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     // Apply initial visibility
     Object.entries(layerVisibility).forEach(([key, visible]) => {
       const group = layerGroupsRef.current[key];
-      if (group) group.visible = visible;
+      if (group) {
+        if (key === 'surface' && typeof visible === 'object') {
+          // Handle Surface Sublayers
+          group.visible = visible._group;
+          // Toggle individual children based on their userData type
+          group.children.forEach(child => {
+            const type = child.userData.subtype || 'default';
+            const isSubVisible = (visible as any)[type] !== undefined ? (visible as any)[type] : true;
+            child.visible = isSubVisible;
+          });
+        } else {
+          // Standard Boolean Toggle
+          group.visible = visible as boolean;
+        }
+      }
     });
 
     // Cleanup
