@@ -1,0 +1,7 @@
+{
+  "name": "Cityweft Studio",
+  "description": "A professional-grade 3D context downloader for urban designers and architects. Select regions, configure geometry, and export in industry-standard formats.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
