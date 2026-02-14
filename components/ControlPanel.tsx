@@ -90,25 +90,24 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
         {/* Connection Status Header */}
         <div className="px-10 pt-10 pb-6 border-b border-white/5">
-          <div className="flex items-center justify-between p-4 rounded-3xl bg-slate-900/40 border border-white/5">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center bg-slate-800 ${hasApiKey ? 'text-blue-500' : 'text-slate-400'}`}>
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-slate-900 ${hasApiKey ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-rose-500 animate-pulse'}`} />
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Cityweft API Key</p>
-                <p className="text-xs font-bold text-white tracking-tight">{hasApiKey ? 'Connected' : 'Not Configured'}</p>
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-4">
             <button
               onClick={onOpenApiKeyModal}
-              className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-blue-600 text-slate-300 hover:text-white transition-all text-[9px] font-black uppercase tracking-widest flex items-center gap-2 group border border-white/5"
+              className={`group flex items-center justify-center gap-3 py-4 rounded-[24px] border transition-all duration-300 ${hasApiKey
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)] hover:bg-emerald-500/20'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.15)] animate-pulse hover:bg-rose-500/20'
+                }`}
             >
-              <Key className="w-3 h-3 transition-transform group-hover:rotate-12" />
-              {hasApiKey ? 'Update' : 'Configure'}
+              <div className={`w-2 h-2 rounded-full ${hasApiKey ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]'}`} />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">API Keys</span>
+            </button>
+
+            <button
+              onClick={onFileUpload}
+              className="group flex items-center justify-center gap-3 py-4 rounded-[24px] border border-blue-600/30 bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:border-blue-600/50 hover:text-blue-300 transition-all shadow-[0_0_15px_rgba(37,99,235,0.1)] hover:shadow-[0_0_25px_rgba(37,99,235,0.2)]"
+            >
+              <HardDrive className="w-4 h-4" />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">Load File</span>
             </button>
           </div>
         </div>
@@ -138,24 +137,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         <div className="flex-grow overflow-y-auto px-10 py-10 space-y-8 scroll-smooth">
           {activeTab === 'layers' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {/* Load File Button */}
-              <button
-                onClick={onFileUpload}
-                className="w-full group flex items-center justify-start gap-5 p-6 rounded-[32px] border transition-all duration-300 bg-emerald-900/20 border-emerald-500/20 hover:bg-emerald-900/40 hover:border-emerald-500/40"
-              >
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all bg-emerald-900/50 text-emerald-400 group-hover:text-emerald-300 shadow-xl shadow-emerald-900/20">
-                  <HardDrive className="w-7 h-7" />
-                </div>
-                <div className="text-left flex-grow pt-1">
-                  <p className="text-sm font-black mb-1 uppercase tracking-widest text-emerald-100">Load Local File</p>
-                  <p className="text-[10px] font-bold leading-relaxed text-emerald-500/70">Open a previously saved JSON preview</p>
-                </div>
-                <div className="mt-2 w-6 h-6 rounded-full border-2 border-emerald-500/30 flex items-center justify-center transition-all group-hover:border-emerald-400">
-                  <ChevronDown className="w-4 h-4 text-emerald-500 -rotate-90" />
-                </div>
-              </button>
 
-              <div className="w-full h-px bg-white/5 my-4" />
+
 
               {geometryOptions.map(opt => (
                 <button

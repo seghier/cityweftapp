@@ -14,11 +14,12 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { AppSettings, ExportFormat, AppStatus, CityweftPayload } from './types';
-import { requestCityweftData, downloadFile, fetchGeometryJson, GeometryResponse } from './services/api';
+import { requestCityweftData, downloadFile, fetchGeometryJson, GeometryResponse, reverseGeocode } from './services/api';
 import { getDirectoryHandle, saveDirectoryHandle, verifyPermission, saveFileToDirectory, appendToCSV, loadFileFromDirectory, updateLogWithRender, LogEntry } from './services/storage';
 import MapViewer from './components/MapViewer';
 import ControlPanel from './components/ControlPanel';
 import ModelPreview from './components/ModelPreview';
+import LocationOverlay from './components/LocationOverlay';
 
 const ApiKeyModal: React.FC<{
   isOpen: boolean;
@@ -65,7 +66,7 @@ const ApiKeyModal: React.FC<{
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="cw_live_..."
-                  className="w-full bg-slate-900/50 border border-white/10 rounded-2xl px-6 py-5 text-sm font-mono text-white placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600/50 transition-all"
+                  className="w-full bg-slate-900/50 border border-white/10 rounded-2xl pl-6 pr-14 py-5 text-sm font-mono text-white placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600/50 transition-all"
                 />
                 <button
                   onClick={() => setShowKey(!showKey)}
@@ -96,7 +97,7 @@ const ApiKeyModal: React.FC<{
                   value={nanoBananaApiKey}
                   onChange={(e) => setNanoBananaApiKey(e.target.value)}
                   placeholder="sk-..."
-                  className="w-full bg-slate-900/50 border border-white/10 rounded-2xl px-6 py-5 text-sm font-mono text-white placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+                  className="w-full bg-slate-900/50 border border-white/10 rounded-2xl pl-6 pr-14 py-5 text-sm font-mono text-white placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
                 />
                 <button
                   onClick={() => setShowNanoKey(!showNanoKey)}
@@ -209,12 +210,15 @@ const App: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Preview modal state
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<GeometryResponse | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [previewFileLink, setPreviewFileLink] = useState<string | null>(null);
+  const [locationInfo, setLocationInfo] = useState<{ shortName: string, fullName: string } | null>(null);
+  const [lastPreviewedPolygon, setLastPreviewedPolygon] = useState<[number, number][] | null>(null);
 
   const [settings, setSettings] = useState<AppSettings>({
     geometry: ['buildings', 'surface', 'infrastructure'],
@@ -225,6 +229,38 @@ const App: React.FC = () => {
     topographyReturnType: null,
     defaultRoofType: 'flat'
   });
+
+  const calculateAreaFromPolygon = (polygon: [number, number][]) => {
+    if (polygon.length < 3) return 0;
+    // Simple spherical polygon area approximation (adequate for small city regions)
+    // Or better, use the same logic as MapViewer if possible, but strict geodetic area is complex without a library.
+    // Let's use a standard spherical earth approximation.
+    const R = 6371; // Earth radius in km
+
+    // Shoelace formula for spherical coordinates (simplification for small areas)
+    // Convert to radians
+    const rad = polygon.map(p => [p[0] * Math.PI / 180, p[1] * Math.PI / 180]);
+
+    let area = 0;
+    if (rad.length > 2) {
+      for (let i = 0; i < rad.length; i++) {
+        const j = (i + 1) % rad.length;
+        const p1 = rad[i];
+        const p2 = rad[j];
+        area += (p2[1] - p1[1]) * (2 + Math.sin(p1[0]) + Math.sin(p2[0]));
+      }
+      area = Math.abs(area * R * R / 2.0);
+    }
+
+    // Actually, for a simple rectangular bounds selection which this app mostly does:
+    // We can just get bounds and compute rect area? 
+    // But user might load complex polygon?
+    // Let's stick to the bounds method used in MapViewer for consistency if we assume rect, 
+    // OR use a proper libraryless implementation. 
+    // The implementation above is a spherical approximation.
+
+    return area;
+  };
 
   const [exportConfig, setExportConfig] = useState<{ format: ExportFormat; version: number | null; filename: string }>({
     format: 'skp',
@@ -266,13 +302,43 @@ const App: React.FC = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
 
+  // Reverse Geocoding when polygon is selected manually (and no search query exists)
+  useEffect(() => {
+    if (selectedPolygon && selectedPolygon.length > 0 && (!searchQuery || searchQuery.trim() === '')) {
+      // Calculate centroid
+      let latSum = 0;
+      let lonSum = 0;
+      selectedPolygon.forEach(p => {
+        latSum += p[0];
+        lonSum += p[1];
+      });
+      const centerLat = latSum / selectedPolygon.length;
+      const centerLon = lonSum / selectedPolygon.length;
+
+      reverseGeocode(centerLat, centerLon).then(info => {
+        if (info) {
+          setLocationInfo(info);
+          const safeName = info.fullName.split(',')[0].trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_');
+          // We actually want to avail the full name for the file if possible, or at least city_country
+          const safeFullName = info.fullName.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_');
+          setExportConfig(prev => ({ ...prev, filename: safeFullName }));
+        }
+      });
+    } else if (!selectedPolygon) {
+      setLocationInfo(null);
+    }
+  }, [selectedPolygon]);
+
   const handleSelectLocation = (lat: string, lon: string, displayName: string) => {
     setMapFlyTo([parseFloat(lat), parseFloat(lon)]);
     setSearchQuery(displayName);
+    const shortName = displayName.split(',')[0];
+    setLocationInfo({ shortName, fullName: displayName });
+
     setShowSuggestions(false);
-    // Sanitize filename from city name
-    const safeName = displayName.split(',')[0].trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_');
-    setExportConfig(prev => ({ ...prev, filename: safeName }));
+    // Use full name for file export
+    const safeFullName = displayName.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_');
+    setExportConfig(prev => ({ ...prev, filename: safeFullName }));
 
     // Attempt to load cached preview if handle and name exist
     if (downloadHandle) {
@@ -306,6 +372,13 @@ const App: React.FC = () => {
       return;
     }
 
+    // Check if we already have the data for this polygon
+    if (previewData && lastPreviewedPolygon && JSON.stringify(lastPreviewedPolygon) === JSON.stringify(selectedPolygon)) {
+      setIsLoadingPreview(false);
+      setShowPreview(true);
+      return;
+    }
+
     setIsLoadingPreview(true);
     setShowPreview(true);
     setPreviewData(null);
@@ -313,14 +386,16 @@ const App: React.FC = () => {
 
     // cacheFilename: Used for quick reloading. 
     // For unnamed regions, we use a fixed name so we can always check "the last unnamed preview".
-    const cacheFilename = searchQuery
-      ? `${searchQuery.split(',')[0].trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')}_preview.json`
-      : 'unnamed_region_preview.json';
+    const cacheFilename = locationInfo?.fullName
+      ? `${locationInfo.fullName.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')}_preview.json`
+      : (searchQuery
+        ? `${searchQuery.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')}_preview.json`
+        : 'unnamed_region_preview.json');
 
     // storageFilename: Used for permanent record and CSV logging.
     // For unnamed regions, we append a timestamp to ensure uniqueness and prevent overwriting.
     let storageFilename = cacheFilename;
-    const isUnnamed = !searchQuery || searchQuery.trim() === '';
+    const isUnnamed = !locationInfo?.fullName && (!searchQuery || searchQuery.trim() === '');
 
     if (isUnnamed) {
       const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
@@ -330,10 +405,12 @@ const App: React.FC = () => {
     // Capture the filename for later use (rendering)
     setPreviewFileLink(storageFilename);
 
+    setPreviewFileLink(storageFilename);
+
     // Base name for logging
-    const safeName = searchQuery
-      ? searchQuery.split(',')[0].trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')
-      : 'unnamed_region';
+    const safeName = locationInfo?.fullName
+      ? locationInfo.fullName.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')
+      : (searchQuery ? searchQuery.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_') : 'unnamed_region');
 
     try {
       let cachedDataToUse: GeometryResponse | null = null;
@@ -389,6 +466,7 @@ const App: React.FC = () => {
 
       if (existingCacheIsValid && cachedDataToUse) {
         setPreviewData(cachedDataToUse);
+        setLastPreviewedPolygon(selectedPolygon);
         setIsLoadingPreview(false);
         return;
       }
@@ -403,6 +481,7 @@ const App: React.FC = () => {
 
       const geometryData = await fetchGeometryJson(payload, apiKey);
       setPreviewData(geometryData);
+      setLastPreviewedPolygon(selectedPolygon);
 
       // 2. Save cache and log
       if (downloadHandle) {
@@ -430,7 +509,7 @@ const App: React.FC = () => {
             }
 
             // C. Log the UNIQUE filename to CSV
-            const country = searchQuery ? searchQuery.split(',').pop()?.trim() || 'Unknown' : 'Unknown';
+            const country = locationInfo?.fullName ? locationInfo.fullName.split(',').pop()?.trim() || 'Unknown' : (searchQuery ? searchQuery.split(',').pop()?.trim() || 'Unknown' : 'Unknown');
             const logEntry: LogEntry = {
               name: safeName,
               country: country,
@@ -531,7 +610,9 @@ const App: React.FC = () => {
         if (isUnnamed) {
           currentFilename = `unnamed_region_${dateStr}`;
         } else {
-          currentFilename = searchQuery.split(',')[0].trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_');
+          // Fallback to location info or search query if filename is empty but we have location data
+          const refName = locationInfo?.fullName || searchQuery;
+          currentFilename = refName.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_');
         }
       } else {
         // If user manually kept "unnamed_region" or it was auto-set and not changed
@@ -608,12 +689,31 @@ const App: React.FC = () => {
       });
 
       const file = await fileHandle.getFile();
+      await processLoadedFile(file);
+
+    } catch (e: any) {
+      // Fallback to hidden input if API not supported or cancelled
+      if (e.name === 'AbortError') return; // User cancelled
+
+      if (!('showOpenFilePicker' in window)) {
+        fileInputRef.current?.click();
+        return;
+      }
+
+      console.error("File upload failed:", e);
+      setErrorMessage("Failed to load file. Please ensure it is a valid Cityweft JSON preview.");
+    }
+  };
+
+  const processLoadedFile = async (file: File) => {
+    try {
       const text = await file.text();
-      let data = JSON.parse(text);
+      let json = JSON.parse(text);
+      let data = json;
 
       // Check for wrapped format
-      if (data.sourcePolygon && data.data) {
-        data = data.data;
+      if (json.sourcePolygon && json.data) {
+        data = json.data;
       }
 
       if (!data.geometry && !data.origin) {
@@ -621,20 +721,70 @@ const App: React.FC = () => {
       }
 
       setPreviewData(data);
+      if (json.sourcePolygon) {
+        setLastPreviewedPolygon(json.sourcePolygon);
+      }
       setShowPreview(true);
-      // For uploaded files, we can't easily associate back to CSV unless we track filename or something,
-      // but users request is about previews generated.
-      // If we want to support this for uploads:
       setPreviewFileLink(file.name);
 
+      // Extract and focus on polygon if available
+      if (json.sourcePolygon) {
+        const polygon: [number, number][] = json.sourcePolygon;
+        setSelectedPolygon(polygon);
+
+        // Calculate center to fly to
+        if (polygon.length > 0) {
+          const lats = polygon.map(p => p[0]);
+          const lons = polygon.map(p => p[1]);
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLon = Math.min(...lons);
+          const maxLon = Math.max(...lons);
+          const centerLat = (minLat + maxLat) / 2;
+          const centerLon = (minLon + maxLon) / 2;
+
+          // Fly to location
+          setMapFlyTo([centerLat, centerLon]);
+
+          // Calculate Area
+          const area = calculateAreaFromPolygon(polygon);
+          setAreaKm2(area);
+
+          // Update location info
+          reverseGeocode(centerLat, centerLon).then(info => {
+            if (info) {
+              setLocationInfo(info);
+              const safeFullName = info.fullName.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_');
+              setExportConfig(prev => ({ ...prev, filename: safeFullName }));
+            }
+          });
+        }
+      }
+
     } catch (e) {
-      console.error("File upload failed:", e);
-      setErrorMessage("Failed to load file. Please ensure it is a valid Cityweft JSON preview.");
+      console.error("File processing error:", e);
+      setErrorMessage("Failed to process file. Invalid JSON format.");
     }
+  };
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      processLoadedFile(file);
+    }
+    // Reset input
+    if (event.target) event.target.value = '';
   };
 
   return (
     <div className="relative h-screen w-screen bg-[#020617] flex overflow-hidden selection:bg-blue-500/30">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        className="hidden"
+        accept=".json"
+      />
       {/* Floating Search Hub */}
       <div className="absolute top-8 left-8 z-[1400] w-[440px] h-12 pointer-events-none" ref={searchRef}>
         <div className="glass-panel rounded-[32px] p-1 flex items-center shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] pointer-events-auto transition-all duration-500 hover:ring-2 hover:ring-blue-500/20 focus-within:ring-2 focus-within:ring-blue-500/50">
@@ -735,7 +885,9 @@ const App: React.FC = () => {
           onPolygonChange={handlePolygonChange}
           flyTo={mapFlyTo}
           clearTrigger={clearTrigger}
+          externalPolygon={selectedPolygon}
         />
+        <LocationOverlay locationName={locationInfo?.shortName || null} />
       </main>
     </div>
   );

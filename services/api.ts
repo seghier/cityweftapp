@@ -120,3 +120,34 @@ export async function downloadFile(url: string, filename: string): Promise<void>
     throw new Error(error.message || 'Failed to download file');
   }
 }
+
+/**
+ * Reverse geocode coordinates to get address
+ */
+export async function reverseGeocode(lat: number, lon: number): Promise<{ shortName: string, fullName: string } | null> {
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`);
+    if (!response.ok) {
+      throw new Error('Reverse geocoding failed');
+    }
+    const data = await response.json();
+
+    // Construct a meaningful name
+    const address = data.address;
+    if (!address) return null;
+
+    const city = address.city || address.town || address.village || address.municipality;
+    const country = address.country;
+    let shortName = city || data.display_name?.split(',')[0] || 'Unknown Location';
+    let fullName = data.display_name || shortName;
+
+    if (city && country) {
+      fullName = `${city}, ${country}`;
+    }
+
+    return { shortName, fullName };
+  } catch (error) {
+    console.error('Reverse geocoding error:', error);
+    return null;
+  }
+}
