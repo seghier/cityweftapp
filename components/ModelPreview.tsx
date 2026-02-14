@@ -448,8 +448,8 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       solarHelperRef.current = null;
     }
 
-    // If sun study is disabled, stop here (having cleaned up)
-    if (!isSunStudyEnabled) return;
+    // Allow visualization even if sun study is disabled (as per user request)
+    // if (!isSunStudyEnabled) return;
 
     // Only proceed if showSolarPath is ALSO true (and sun study is enabled)
     if (!showSolarPath || !geometryData?.origin) return;
@@ -1347,12 +1347,12 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
 
             {/* Layer Control Panel */}
             <div className={`absolute left-6 top-6 bottom-6 items-start transition-all duration-300 z-10 flex gap-2 pointer-events-none ${showLayers ? 'translate-x-0' : '-translate-x-[calc(100%-40px)]'}`}>
-              <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-xl transition-all pointer-events-auto flex flex-col ${showLayers ? 'w-64 h-full p-4' : 'w-0 h-0 p-0 opacity-0 overflow-hidden'}`}>
-                <div className="flex items-center gap-2 mb-2 text-slate-400 pb-3 border-b border-white/5 shrink-0">
+              <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-xl transition-all pointer-events-auto flex flex-col ${showLayers ? 'w-64 h-full' : 'w-0 h-0 p-0 opacity-0 overflow-hidden'}`}>
+                <div className="flex items-center gap-2 mb-2 text-slate-400 px-4 pt-4 pb-3 border-b border-white/5 shrink-0">
                   <Layers className="w-4 h-4" />
                   <span className="text-xs font-black uppercase tracking-widest">Scene Layers</span>
                 </div>
-                <div className="space-y-2 overflow-y-auto pr-1 flex-1 min-h-0">
+                <div className="space-y-2 overflow-y-auto px-4 flex-1 min-h-0">
                   {[
                     { id: 'buildings', label: 'Buildings', hasSublayers: false },
                     { id: 'surface', label: 'Surface & Roads', hasSublayers: true },
@@ -1424,57 +1424,21 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
                   })}
                 </div>
 
-                {/* Fixed Footer Controls (Map, Sun & Climate) */}
-                <div className="border-t border-white/5 bg-slate-900/50 backdrop-blur-sm -mx-4 px-4 pb-4 pt-2 mt-2 shrink-0">
+                {/* Fixed Footer Controls (Sidebar Bottom) */}
+                <div className="p-4 space-y-3 bg-slate-900/50 backdrop-blur-sm rounded-b-2xl border-t border-white/5 shrink-0 flex flex-col gap-3">
 
-                  {/* Default Shadows Toggle (Only visible when Sun Study is OFF) */}
-                  {!isSunStudyEnabled && (
-                    <div className="mt-2 pt-2">
-                      <button
-                        onClick={() => setShowDefaultShadows(!showDefaultShadows)}
-                        className={`w-full flex items-center justify-between p-2 rounded-lg transition-all mb-1 ${showDefaultShadows ? 'bg-slate-700/50 text-slate-200' : 'bg-transparent text-slate-500 hover:text-slate-400 hover:bg-white/5'}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Box className="w-4 h-4" />
-                          <span className="text-xs font-black uppercase tracking-widest">Default Shadows</span>
-                        </div>
-                        {showDefaultShadows ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  )}
+                  {/* Top Controls: Slider & Path (Always Visible) */}
+                  <div className="space-y-3">
 
-                  {/* Map Underlay Control */}
-                  <div className="mt-2 pt-2">
-                    <button
-                      onClick={() => setShowMapUnderlay(!showMapUnderlay)}
-                      className={`w-full flex items-center justify-between p-2 rounded-lg transition-all mb-4 ${showMapUnderlay ? 'bg-indigo-600/20 text-indigo-200' : 'bg-transparent text-slate-400 hover:text-slate-300 hover:bg-white/5'}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <ImageIcon className="w-4 h-4" />
-                        <span className="text-xs font-black uppercase tracking-widest">Map Underlay</span>
-                      </div>
-                      {showMapUnderlay ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-
-                  {/* Sun Study Control */}
-                  <div className="mt-2 pt-2">
-                    <button
-                      onClick={() => setIsSunStudyEnabled(!isSunStudyEnabled)}
-                      className={`w-full flex items-center justify-between p-2 rounded-lg transition-all mb-4 ${isSunStudyEnabled ? 'bg-amber-600/20 text-amber-200' : 'bg-transparent text-slate-400 hover:text-slate-300 hover:bg-white/5'}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Sun className="w-4 h-4" />
-                        <span className="text-xs font-black uppercase tracking-widest">Sun Study</span>
-                      </div>
-                      {isSunStudyEnabled ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                    </button>
-
-                    <div className={`px-2 transition-all duration-300 opacity-100 pointer-events-auto`}>
-                      <div className="flex justify-between text-[10px] font-mono text-slate-400 mb-2">
-                        <span>06:00</span>
-                        <span className="text-white font-bold">{Math.floor(timeOfDay).toString().padStart(2, '0')}:{(Math.floor((timeOfDay % 1) * 60)).toString().padStart(2, '0')}</span>
-                        <span>20:00</span>
+                    {/* Time Slider */}
+                    <div className="bg-slate-950/50 rounded-xl p-3 border border-white/5">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Time of Day
+                        </span>
+                        <span className="font-mono font-bold text-white text-xs">
+                          {Math.floor(timeOfDay).toString().padStart(2, '0')}:{(Math.floor((timeOfDay % 1) * 60)).toString().padStart(2, '0')}
+                        </span>
                       </div>
                       <input
                         type="range"
@@ -1483,86 +1447,72 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
                         step="0.1"
                         value={timeOfDay}
                         onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
-                        className={`w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg hover:[&::-webkit-slider-thumb]:scale-110 transition-all ${isSunStudyEnabled ? '[&::-webkit-slider-thumb]:bg-amber-500' : '[&::-webkit-slider-thumb]:bg-slate-500'}`}
+                        className={`w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg hover:[&::-webkit-slider-thumb]:scale-110 transition-all mb-2 ${isSunStudyEnabled ? '[&::-webkit-slider-thumb]:bg-amber-500' : isClimateEnabled ? '[&::-webkit-slider-thumb]:bg-sky-500' : '[&::-webkit-slider-thumb]:bg-slate-400'}`}
                       />
-
-                      {/* Path Toggle */}
-                      {isSunStudyEnabled && (
-                        <button
-                          onClick={() => setShowSolarPath(!showSolarPath)}
-                          className={`w-full mt-3 flex items-center justify-between p-2 rounded-lg border transition-all ${showSolarPath ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-transparent border-white/5 text-slate-500 hover:text-slate-300'}`}
-                        >
-                          <span className="text-[10px] font-black uppercase tracking-widest">Visualize Path</span>
-                          <div className={`w-8 h-4 rounded-full relative transition-colors ${showSolarPath ? 'bg-amber-500' : 'bg-slate-700'}`}>
-                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${showSolarPath ? 'left-[18px]' : 'left-0.5'}`} />
-                          </div>
-                        </button>
-                      )}
+                      <div className="flex justify-between text-[8px] text-slate-600 font-mono px-0.5">
+                        <span>06:00</span>
+                        <span>13:00</span>
+                        <span>20:00</span>
+                      </div>
                     </div>
+
+                    {/* Sun Path Toggle */}
+                    <button
+                      onClick={() => setShowSolarPath(!showSolarPath)}
+                      className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${showSolarPath ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-slate-950/50 border-white/5 text-slate-400 hover:text-slate-200 hover:bg-slate-900'}`}
+                    >
+                      <span className="text-[10px] font-bold uppercase tracking-widest">Visualize Path</span>
+                      <div className={`w-8 h-4 rounded-full relative transition-colors ${showSolarPath ? 'bg-amber-500' : 'bg-slate-700'}`}>
+                        <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${showSolarPath ? 'left-[18px]' : 'left-0.5'}`} />
+                      </div>
+                    </button>
                   </div>
 
-                  {/* Climate Analysis Control */}
-                  <div className="mt-4 pt-4 border-t border-white/5">
+                  {/* 4-Button Grid: Default Shadow, Map, Sun, Climate */}
+                  <div className="grid grid-cols-4 gap-2">
+                    {/* 1. Default Shadows */}
                     <button
-                      onClick={() => setIsClimateEnabled(!isClimateEnabled)}
-                      className={`w-full flex items-center justify-between p-2 rounded-lg transition-all mb-4 ${isClimateEnabled ? 'bg-sky-600/20 text-sky-200' : 'bg-transparent text-slate-400 hover:text-slate-300 hover:bg-white/5'}`}
+                      onClick={() => setShowDefaultShadows(!showDefaultShadows)}
+                      disabled={isSunStudyEnabled}
+                      className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-all ${showDefaultShadows && !isSunStudyEnabled ? 'bg-slate-700 text-white border-slate-600' : 'bg-slate-800/50 border-white/5 text-slate-500 hover:bg-slate-800 hover:text-slate-300'} ${isSunStudyEnabled ? 'opacity-30 cursor-not-allowed' : ''}`}
+                      title="Default Shadows"
                     >
-                      <div className="flex items-center gap-2">
-                        <Wind className="w-4 h-4" />
-                        <span className="text-xs font-black uppercase tracking-widest">Climate</span>
-                      </div>
-                      {isClimateEnabled ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      <Box className="w-4 h-4 mb-1" />
+                      <span className="text-[8px] font-bold uppercase tracking-wider">Shad</span>
                     </button>
 
-                    <div className={`px-2 transition-all duration-300 space-y-3 ${isClimateEnabled ? 'opacity-100 max-h-40' : 'opacity-30 max-h-0 overflow-hidden'}`}>
-                      {climateData ? (
-                        (() => {
-                          const hourIndex = Math.round(timeOfDay) % 24;
-                          const currentData = climateData.hourly[hourIndex] || climateData.current;
+                    {/* 2. Map Underlay */}
+                    <button
+                      onClick={() => setShowMapUnderlay(!showMapUnderlay)}
+                      className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-all ${showMapUnderlay ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300' : 'bg-slate-800/50 border-white/5 text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                      title="Map"
+                    >
+                      <ImageIcon className={`w-4 h-4 mb-1 ${showMapUnderlay ? 'text-indigo-400' : ''}`} />
+                      <span className="text-[8px] font-bold uppercase tracking-wider">Map</span>
+                    </button>
 
-                          return (
-                            <>
-                              <div className="flex items-center justify-between text-xs text-slate-300">
-                                <div className="flex items-center gap-2">
-                                  <Thermometer className="w-3.5 h-3.5 text-amber-500" />
-                                  <span>Temperature</span>
-                                </div>
-                                <span className="font-mono font-bold">{currentData.temperature}°C</span>
-                              </div>
+                    {/* 3. Sun Study */}
+                    <button
+                      onClick={() => {
+                        setIsSunStudyEnabled(!isSunStudyEnabled);
+                        if (isSunStudyEnabled) setIsClimateEnabled(false);
+                      }}
+                      className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-all ${isSunStudyEnabled ? 'bg-amber-500/20 border-amber-500/50 text-amber-300' : 'bg-slate-800/50 border-white/5 text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                      title="Sun Study"
+                    >
+                      <Sun className={`w-4 h-4 mb-1 ${isSunStudyEnabled ? 'text-amber-400' : ''}`} />
+                      <span className="text-[8px] font-bold uppercase tracking-wider">Sun</span>
+                    </button>
 
-                              <div className="flex items-center justify-between text-xs text-slate-300">
-                                <div className="flex items-center gap-2">
-                                  <Wind className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>Wind Speed</span>
-                                </div>
-                                <span className="font-mono font-bold">{currentData.windSpeed} km/h</span>
-                              </div>
-
-                              <div className="flex items-center justify-between text-xs text-slate-300">
-                                <div className="flex items-center gap-2">
-                                  <Compass className="w-3.5 h-3.5 text-emerald-500" />
-                                  <span>Direction</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono font-bold">{currentData.windDirection}°</span>
-                                  <div
-                                    className="w-4 h-4 rounded-full border border-white/20 flex items-center justify-center bg-slate-800"
-                                    style={{ transform: `rotate(${currentData.windDirection}deg)` }}
-                                  >
-                                    <div className="w-0.5 h-2 bg-emerald-500 rounded-full" />
-                                  </div>
-                                </div>
-                              </div>
-                            </>
-                          );
-                        })()
-                      ) : (
-                        <div className="flex items-center justify-center py-2 text-xs text-slate-500 animate-pulse">
-                          <Loader2 className="w-3 h-3 animate-spin mr-2" />
-                          Fetching weather...
-                        </div>
-                      )}
-                    </div>
+                    {/* 4. Climate */}
+                    <button
+                      onClick={() => setIsClimateEnabled(!isClimateEnabled)}
+                      className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-all ${isClimateEnabled ? 'bg-sky-500/20 border-sky-500/50 text-sky-300' : 'bg-slate-800/50 border-white/5 text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                      title="Climate"
+                    >
+                      <Wind className={`w-4 h-4 mb-1 ${isClimateEnabled ? 'text-sky-400' : ''}`} />
+                      <span className="text-[8px] font-bold uppercase tracking-wider">Clim</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1743,20 +1693,63 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-white/5 bg-slate-900/50 backdrop-blur-sm flex justify-between items-center">
-          <div className="flex flex-col gap-1">
-            <div className="flex gap-4 text-[10px] font-mono text-slate-500">
-              <div>LMB: ROTATE</div>
-              <div>RMB: PAN</div>
-              <div>SCROLL: ZOOM</div>
-            </div>
+        <div className="h-[88px] px-6 border-t border-white/5 bg-slate-900/50 backdrop-blur-sm flex justify-between items-center shrink-0">
+          <div className="flex flex-col gap-1 w-[200px]">
 
-            {/* Stats Display Moved to Footer */}
+
+            {/* Stats Display - Always Visible on Left */}
             {activeTab === '3d' && (
-              <div className="text-xs text-slate-400 font-mono flex items-center gap-2 mt-1">
-                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                {stats.meshCount} meshes • {stats.vertexCount.toLocaleString()} vertices
+              <div className="text-[10px] text-slate-400 font-mono flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0"></div>
+                  <span>{stats.meshCount.toLocaleString()} meshes</span>
+                </div>
+                <div className="pl-3.5">
+                  {stats.vertexCount.toLocaleString()} vertices
+                </div>
               </div>
+            )}
+          </div>
+
+          {/* Center: Climate Information (Empty space filled when active) */}
+          <div className="flex-1 flex justify-center">
+            {isClimateEnabled && climateData && (
+              (() => {
+                const hourIndex = Math.round(timeOfDay) % 24;
+                const currentData = climateData.hourly[hourIndex] || climateData.current;
+                return (
+                  <div className="flex items-center gap-6 animate-in fade-in zoom-in duration-300 bg-slate-900/80 backdrop-blur-md px-6 py-2 rounded-2xl border border-white/10 shadow-lg">
+                    <div className="flex items-center gap-2">
+                      <Thermometer className="w-4 h-4 text-amber-500" />
+                      <div className="flex flex-col">
+                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Temp</span>
+                        <span className="text-sm font-black text-white font-mono leading-none">{currentData.temperature}°C</span>
+                      </div>
+                    </div>
+                    <div className="w-px h-6 bg-white/10" />
+                    <div className="flex items-center gap-2">
+                      <Wind className="w-4 h-4 text-sky-400" />
+                      <div className="flex flex-col">
+                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Wind</span>
+                        <span className="text-sm font-black text-white font-mono leading-none">{currentData.windSpeed} <span className="text-[9px] text-slate-500">km/h</span></span>
+                      </div>
+                    </div>
+                    <div className="w-px h-6 bg-white/10" />
+                    <div className="flex items-center gap-2">
+                      <Compass className="w-4 h-4 text-emerald-500" />
+                      <div className="flex flex-col">
+                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Dir</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-black text-white font-mono leading-none">{currentData.windDirection}°</span>
+                          <div className="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center border border-white/10" style={{ transform: `rotate(${currentData.windDirection}deg)` }}>
+                            <div className="w-0.5 h-2 bg-emerald-400 rounded-full" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
             )}
           </div>
 
