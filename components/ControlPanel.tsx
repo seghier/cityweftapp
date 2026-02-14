@@ -318,31 +318,31 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           )}
 
           {!isDownloading ? (
-            <div className="space-y-3">
+            <div className="flex gap-3">
               {/* Preview Button */}
               <button
                 disabled={!canDownload}
                 onClick={onPreview}
-                className={`w-full group flex items-center justify-center gap-5 py-6 rounded-[28px] font-black text-sm uppercase tracking-[0.3em] transition-all shadow-2xl active:scale-[0.98] ${canDownload
+                className={`flex-1 group flex items-center justify-center gap-3 py-5 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] transition-all shadow-2xl active:scale-[0.98] ${canDownload
                   ? 'bg-slate-800 hover:bg-slate-700 text-white border border-white/10 hover:border-blue-500/30'
                   : 'bg-slate-950 text-slate-700 cursor-not-allowed border border-white/5'
                   }`}
               >
-                <Eye className={`w-6 h-6 ${canDownload ? 'group-hover:scale-110 transition-transform' : ''}`} />
-                Preview Model
+                <Eye className={`w-5 h-5 ${canDownload ? 'group-hover:scale-110 transition-transform' : ''}`} />
+                Preview
               </button>
 
               {/* Download Button */}
               <button
                 disabled={!canDownload}
                 onClick={onDownload}
-                className={`w-full group flex items-center justify-center gap-5 py-7 rounded-[28px] font-black text-sm uppercase tracking-[0.3em] transition-all shadow-2xl active:scale-[0.98] ${canDownload
+                className={`flex-1 group flex items-center justify-center gap-3 py-5 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] transition-all shadow-2xl active:scale-[0.98] ${canDownload
                   ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30 ring-2 ring-blue-500/20'
                   : 'bg-slate-950 text-slate-700 cursor-not-allowed border border-white/5'
                   }`}
               >
-                <Download className={`w-6 h-6 ${canDownload ? 'animate-bounce' : ''}`} />
-                Extract Site
+                <Download className={`w-5 h-5 ${canDownload ? 'animate-bounce' : ''}`} />
+                Extract
               </button>
             </div>
           ) : (
