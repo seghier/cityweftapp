@@ -870,7 +870,6 @@ const App: React.FC = () => {
         isOpen={showPreview}
         onClose={() => {
           setShowPreview(false);
-          setPreviewData(null);
         }}
         geometryData={previewData}
         onConfirmDownload={handleDownloadFromPreview}
