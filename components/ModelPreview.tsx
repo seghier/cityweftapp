@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   X, RotateCcw, Eye, Download, Loader2, Image as ImageIcon,
   Box, Edit2, Check, ChevronDown, Layers, ChevronLeft, EyeOff, Sun, ChevronRight, Wind, Thermometer, Compass
@@ -161,6 +162,9 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
   const [showSunControls, setShowSunControls] = useState(false);
   const [showSolarPath, setShowSolarPath] = useState(false);
   const solarHelperRef = useRef<THREE.Group | null>(null);
+
+  // Cinematic Mode
+  const [autoRotate, setAutoRotate] = useState(false);
 
   // Climate State
   const [climateData, setClimateData] = useState<{
@@ -430,6 +434,14 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     }
 
   }, [timeOfDay, geometryData, isSunStudyEnabled, sceneGeneration, showDefaultShadows]);
+
+  // Handle Auto-Rotate
+  useEffect(() => {
+    if (controlsRef.current) {
+      controlsRef.current.autoRotate = autoRotate;
+      controlsRef.current.autoRotateSpeed = 1.0; // Gentle rotation
+    }
+  }, [autoRotate]);
 
   // Handle Solar Path Visualization (Arc and Compass)
   useEffect(() => {
@@ -990,6 +1002,38 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
       default: []
     };
 
+    // MERGING STRATEGY:
+    // We will collect geometries into arrays based on their layer and material (color/type).
+    // optimizing from thousands of meshes to ~10-20 merged meshes.
+
+    // Storage for geometries to be merged
+    const meshesToMerge: {
+      buildings: THREE.BufferGeometry[];
+      barriers: THREE.BufferGeometry[];
+      topography: THREE.BufferGeometry[];
+      surface: Record<string, THREE.BufferGeometry[]>;
+      infrastructure: Record<string, THREE.BufferGeometry[]>;
+    } = {
+      buildings: [],
+      barriers: [],
+      topography: [],
+      surface: {},
+      infrastructure: {}
+    };
+
+    // Helper to add to merge lists
+    const addToMerge = (category: 'buildings' | 'barriers' | 'topography' | 'surface' | 'infrastructure', geometry: THREE.BufferGeometry, subtype: string = 'default') => {
+      if (category === 'surface') {
+        if (!meshesToMerge.surface[subtype]) meshesToMerge.surface[subtype] = [];
+        meshesToMerge.surface[subtype].push(geometry);
+      } else if (category === 'infrastructure') {
+        if (!meshesToMerge.infrastructure[subtype]) meshesToMerge.infrastructure[subtype] = [];
+        meshesToMerge.infrastructure[subtype].push(geometry);
+      } else {
+        meshesToMerge[category].push(geometry);
+      }
+    };
+
     geometryData.geometry.forEach((geomData) => {
       const { type, geometryType } = geomData;
 
@@ -1002,71 +1046,26 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
           geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
           geometry.computeVertexNormals();
 
-
-          let color = COLORS.buildings;
-          let targetLayer = layers.infrastructure; // default fallback
+          // Identify Category and Subtype
+          let category: 'buildings' | 'barriers' | 'topography' | 'surface' | 'infrastructure' = 'infrastructure';
+          let subtype = 'default';
 
           if (type === 'buildings') {
-            color = COLORS.buildings;
-            targetLayer = layers.buildings;
+            category = 'buildings';
           } else if (type === 'surface') {
-            const surfaceType = mesh.descriptor?.pathType || mesh.descriptor?.type || 'default';
-            color = COLORS.surface[surfaceType as keyof typeof COLORS.surface] || COLORS.surface.default;
-            targetLayer = layers.surface;
-
-            // Store subtype for filtering later
-            // We use 'subtype' in userData to match the keys in our state
-            // Normalize some keys if needed
-            let normalizedType = surfaceType;
-            if (['pavement', 'footway'].includes(surfaceType)) normalizedType = 'footway';
-            if (['roadway', 'roadwayIntersection', 'roadwayArea', 'asphalt'].includes(surfaceType)) normalizedType = 'roadway';
-            // Actually let's keep exact mapping from the COLORS object keys for simplicity
-
+            category = 'surface';
+            subtype = mesh.descriptor?.pathType || mesh.descriptor?.type || 'default';
           } else if (type === 'infrastructure') {
-            const infraType = mesh.descriptor?.type || 'default';
-            color = COLORS.infrastructure[infraType as keyof typeof COLORS.infrastructure] || COLORS.infrastructure.default;
-            targetLayer = layers.infrastructure;
+            category = 'infrastructure';
+            subtype = mesh.descriptor?.type || 'default';
           } else if (type === 'barriers') {
-            color = COLORS.barriers;
-            targetLayer = layers.barriers;
+            category = 'barriers';
           } else if (type === 'topography') {
-            color = COLORS.topography;
-            targetLayer = layers.topography;
+            category = 'topography';
           }
 
-          const material = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(color),
-            flatShading: false,
-            side: THREE.DoubleSide,
-            metalness: 0.1,
-            roughness: 0.8
-          });
+          addToMerge(category, geometry, subtype);
 
-          const meshObject = new THREE.Mesh(geometry, material);
-          meshObject.castShadow = true;
-          meshObject.receiveShadow = true;
-
-          // Store metadata
-          const surfaceType = mesh.descriptor?.pathType || mesh.descriptor?.type || 'default';
-          meshObject.userData = {
-            type,
-            subtype: surfaceType,
-            descriptor: mesh.descriptor
-          };
-
-          targetLayer.add(meshObject);
-
-          // Add Edges for Buildings
-          if (type === 'buildings') {
-            const edges = new THREE.EdgesGeometry(geometry);
-            const line = new THREE.LineSegments(
-              edges,
-              new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2 })
-            );
-            meshObject.add(line);
-          }
-
-          totalMeshes++;
           totalVertices += vertices.length / 3;
         });
       }
@@ -1136,6 +1135,113 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
           }
         });
       }
+    });
+
+    // --- MERGE & CREATE MESHES ---
+
+    // 1. Buildings (White + Edges)
+    if (meshesToMerge.buildings.length > 0) {
+      const mergedGeo = BufferGeometryUtils.mergeGeometries(meshesToMerge.buildings);
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(COLORS.buildings),
+        flatShading: false,
+        side: THREE.DoubleSide,
+        metalness: 0.1,
+        roughness: 0.8
+      });
+      const mesh = new THREE.Mesh(mergedGeo, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData = { type: 'buildings' };
+
+      // Edges for Buildings - Optimized on merged geometry
+      const edges = new THREE.EdgesGeometry(mergedGeo);
+      const line = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2 })
+      );
+      mesh.add(line);
+
+      layers.buildings.add(mesh);
+      totalMeshes++;
+    }
+
+    // 2. Barriers
+    if (meshesToMerge.barriers.length > 0) {
+      const mergedGeo = BufferGeometryUtils.mergeGeometries(meshesToMerge.barriers);
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(COLORS.barriers),
+        flatShading: false,
+        side: THREE.DoubleSide,
+        metalness: 0.1,
+        roughness: 0.8
+      });
+      const mesh = new THREE.Mesh(mergedGeo, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData = { type: 'barriers' };
+      layers.barriers.add(mesh);
+      totalMeshes++;
+    }
+
+    // 3. Topography
+    if (meshesToMerge.topography.length > 0) {
+      const mergedGeo = BufferGeometryUtils.mergeGeometries(meshesToMerge.topography);
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(COLORS.topography),
+        flatShading: false,
+        side: THREE.DoubleSide,
+        metalness: 0.1,
+        roughness: 0.8
+      });
+      const mesh = new THREE.Mesh(mergedGeo, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData = { type: 'topography' };
+      layers.topography.add(mesh);
+      totalMeshes++;
+    }
+
+    // 4. Surface (Grouped by Subtype)
+    Object.entries(meshesToMerge.surface).forEach(([subtype, geos]) => {
+      if (geos.length === 0) return;
+      const mergedGeo = BufferGeometryUtils.mergeGeometries(geos);
+      const color = COLORS.surface[subtype as keyof typeof COLORS.surface] || COLORS.surface.default;
+
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(color),
+        flatShading: false,
+        side: THREE.DoubleSide,
+        metalness: 0.1,
+        roughness: 0.8
+      });
+      const mesh = new THREE.Mesh(mergedGeo, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData = { type: 'surface', subtype: subtype }; // Metadata for visibility toggle
+      layers.surface.add(mesh);
+      totalMeshes++;
+    });
+
+    // 5. Infrastructure (Meshes)
+    Object.entries(meshesToMerge.infrastructure).forEach(([subtype, geos]) => {
+      if (geos.length === 0) return;
+      const mergedGeo = BufferGeometryUtils.mergeGeometries(geos);
+      const color = COLORS.infrastructure[subtype as keyof typeof COLORS.infrastructure] || COLORS.infrastructure.default;
+
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(color),
+        flatShading: false,
+        side: THREE.DoubleSide,
+        metalness: 0.1,
+        roughness: 0.8
+      });
+      const mesh = new THREE.Mesh(mergedGeo, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData = { type: 'infrastructure', subtype: subtype };
+      layers.infrastructure.add(mesh);
+      totalMeshes++;
     });
 
     // Create InstancedMeshes
@@ -1452,7 +1558,38 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
                       <div className="flex justify-between text-[8px] text-slate-600 font-mono px-0.5">
                         <span>06:00</span>
                         <span>13:00</span>
-                        <span>20:00</span>
+                      </div>
+                      <div className="flex justify-between items-center px-0.5 mb-2">
+                        <div className="flex gap-1">
+                          {[
+                            { label: 'Morning', value: 8, icon: <Sun className="w-3 h-3" /> },
+                            { label: 'Noon', value: 12, icon: <Sun className="w-3 h-3 text-amber-400" /> },
+                            { label: 'Sunset', value: 17.5, icon: <Sun className="w-3 h-3 text-orange-500" /> },
+                            { label: 'Night', value: 22, icon: <Sun className="w-3 h-3 text-blue-400" /> }
+                          ].map(preset => (
+                            <button
+                              key={preset.label}
+                              onClick={() => {
+                                setTimeOfDay(preset.value);
+                                if (!isSunStudyEnabled) setIsSunStudyEnabled(true);
+                              }}
+                              className="p-1.5 rounded-lg bg-slate-900 border border-white/5 hover:bg-slate-800 hover:border-white/20 transition-all text-slate-400 hover:text-white"
+                              title={`Set time to ${preset.label}`}
+                            >
+                              {preset.icon}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => setAutoRotate(!autoRotate)}
+                          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all text-[9px] font-bold uppercase tracking-wider ${autoRotate
+                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
+                            : 'bg-slate-900 border-white/5 text-slate-400 hover:border-white/20 hover:text-white'
+                            }`}
+                        >
+                          <RotateCcw className={`w-3 h-3 ${autoRotate ? 'animate-spin-slow' : ''}`} />
+                          Auto
+                        </button>
                       </div>
                     </div>
 

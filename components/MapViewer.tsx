@@ -49,12 +49,14 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
       attributionControl: false,
       fadeAnimation: true,
       zoomAnimation: true,
-      maxBoundsViscosity: 1.0
+      maxBoundsViscosity: 1.0,
+      preferCanvas: true
     });
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       maxZoom: 20,
-      subdomains: 'abcd'
+      subdomains: 'abcd',
+      keepBuffer: 8
     }).addTo(map);
 
     map.pm.addControls({
