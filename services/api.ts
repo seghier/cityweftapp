@@ -126,7 +126,7 @@ export async function downloadFile(url: string, filename: string): Promise<void>
  */
 export async function reverseGeocode(lat: number, lon: number): Promise<{ shortName: string, fullName: string } | null> {
   try {
-    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`);
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&accept-language=en`);
     if (!response.ok) {
       throw new Error('Reverse geocoding failed');
     }

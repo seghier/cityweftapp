@@ -288,7 +288,7 @@ const App: React.FC = () => {
     const delayDebounceFn = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5`);
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5&accept-language=en`);
         const data = await response.json();
         setSuggestions(data);
         setShowSuggestions(true);
