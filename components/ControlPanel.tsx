@@ -36,6 +36,7 @@ interface ControlPanelProps {
   onOpenApiKeyModal: () => void;
   hasApiKey: boolean;
   onFileUpload: () => void;
+  onDownloadOSM: () => void;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -53,7 +54,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   canDownload,
   onOpenApiKeyModal,
   hasApiKey,
-  onFileUpload
+  onFileUpload,
+  onDownloadOSM
 }) => {
   const [activeTab, setActiveTab] = useState<'layers' | 'engine' | 'output'>('layers');
 
@@ -85,7 +87,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   const isDownloading = [AppStatus.PREPARING, AppStatus.REQUESTING, AppStatus.PROCESSING, AppStatus.DOWNLOADING].includes(status);
 
   return (
-    <div className="w-[440px] h-[calc(100%-116px)] mt-[84px] mb-8 ml-8 relative z-[1100] flex flex-col pointer-events-none">
+    <div className="w-[440px] h-[calc(100%-64px)] mt-8 mb-8 ml-8 relative z-[1100] flex flex-col pointer-events-none">
       <div className="glass-panel h-full rounded-[48px] overflow-hidden flex flex-col shadow-2xl pointer-events-auto border border-white/10">
 
         {/* Connection Status Header */}
@@ -144,20 +146,20 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                 <button
                   key={opt.id}
                   onClick={() => toggleGeometry(opt.id)}
-                  className={`w-full group flex items-center justify-start gap-5 p-6 rounded-[32px] border transition-all duration-300 ${settings.geometry.includes(opt.id)
+                  className={`w-full group flex items-center justify-start gap-4 p-4 rounded-[24px] border transition-all duration-300 ${settings.geometry.includes(opt.id)
                     ? 'bg-blue-600/10 border-blue-600/40 ring-1 ring-blue-600/20'
                     : 'bg-slate-900/30 border-white/5 hover:bg-slate-900/50'
                     }`}
                 >
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${settings.geometry.includes(opt.id) ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'bg-slate-800 text-slate-500 group-hover:text-slate-300'}`}>
-                    <opt.icon className="w-7 h-7" />
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${settings.geometry.includes(opt.id) ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'bg-slate-800 text-slate-500 group-hover:text-slate-300'}`}>
+                    <opt.icon className="w-5 h-5" />
                   </div>
-                  <div className="text-left flex-grow pt-1">
-                    <p className={`text-sm font-black mb-1 uppercase tracking-widest ${settings.geometry.includes(opt.id) ? 'text-white' : 'text-slate-300'}`}>{opt.label}</p>
-                    <p className={`text-[10px] font-bold leading-relaxed ${settings.geometry.includes(opt.id) ? 'text-blue-200/70' : 'text-slate-500'}`}>{opt.desc}</p>
+                  <div className="text-left flex-grow pt-0.5">
+                    <p className={`text-xs font-black mb-0.5 uppercase tracking-widest ${settings.geometry.includes(opt.id) ? 'text-white' : 'text-slate-300'}`}>{opt.label}</p>
+                    <p className={`text-[9px] font-bold leading-tight ${settings.geometry.includes(opt.id) ? 'text-blue-200/70' : 'text-slate-500'}`}>{opt.desc}</p>
                   </div>
-                  <div className={`mt-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${settings.geometry.includes(opt.id) ? 'bg-blue-600 border-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.4)]' : 'border-slate-700'}`}>
-                    {settings.geometry.includes(opt.id) && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                  <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${settings.geometry.includes(opt.id) ? 'bg-blue-600 border-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.4)]' : 'border-slate-700'}`}>
+                    {settings.geometry.includes(opt.id) && <CheckCircle2 className="w-3 h-3 text-white" />}
                   </div>
                 </button>
               ))}
@@ -228,13 +230,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                   <button
                     key={fmt.id}
                     onClick={() => setExportConfig(prev => ({ ...prev, format: fmt.id }))}
-                    className={`flex flex-col items-center gap-4 p-6 rounded-[32px] border transition-all duration-300 group ${exportConfig.format === fmt.id
+                    className={`flex flex-col items-center gap-3 p-4 rounded-[24px] border transition-all duration-300 group ${exportConfig.format === fmt.id
                       ? 'bg-blue-600/15 border-blue-600/50 ring-2 ring-blue-600/10 shadow-2xl'
                       : 'bg-slate-900/30 border-white/5 hover:bg-slate-900/50 text-slate-400'
                       }`}
                   >
-                    <fmt.icon className={`w-10 h-10 transition-transform group-hover:scale-110 ${exportConfig.format === fmt.id ? 'text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]' : 'text-slate-500'}`} />
-                    <span className={`text-[10px] font-black text-center uppercase tracking-[0.2em] ${exportConfig.format === fmt.id ? 'text-white' : 'text-slate-500'}`}>{fmt.label}</span>
+                    <fmt.icon className={`w-8 h-8 transition-transform group-hover:scale-110 ${exportConfig.format === fmt.id ? 'text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]' : 'text-slate-500'}`} />
+                    <span className={`text-[9px] font-black text-center uppercase tracking-[0.2em] ${exportConfig.format === fmt.id ? 'text-white' : 'text-slate-500'}`}>{fmt.label}</span>
                   </button>
                 ))}
               </div>
@@ -296,35 +298,49 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           {selectedArea > 5 && (
             <div className="flex items-start gap-4 p-5 rounded-[24px] bg-rose-500/10 text-rose-500 border border-rose-500/20">
               <AlertCircle className="w-6 h-6 shrink-0 mt-0.5" />
-              <p className="text-[11px] font-bold leading-relaxed">Region exceeds the 5.0 km² limit. Please scale down selection.</p>
+              <p className="text-[14px]leading-relaxed">Region exceeds the 5.0 km² limit.</p>
             </div>
           )}
 
           {!isDownloading ? (
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               {/* Preview Button */}
               <button
                 disabled={!canDownload}
                 onClick={onPreview}
-                className={`flex-1 group flex items-center justify-center gap-3 py-5 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] transition-all shadow-2xl active:scale-[0.98] ${canDownload
+                className={`flex-1 group flex items-center justify-center gap-2 py-4 rounded-[20px] font-black text-[10px] uppercase tracking-wider transition-all shadow-xl active:scale-[0.98] ${canDownload
                   ? 'bg-slate-800 hover:bg-slate-700 text-white border border-white/10 hover:border-blue-500/30'
                   : 'bg-slate-950 text-slate-700 cursor-not-allowed border border-white/5'
                   }`}
               >
-                <Eye className={`w-5 h-5 ${canDownload ? 'group-hover:scale-110 transition-transform' : ''}`} />
+                <Eye className={`w-4 h-4 ${canDownload ? 'group-hover:scale-110 transition-transform' : ''}`} />
                 Preview
+              </button>
+
+              {/* OSM Button */}
+              <button
+                disabled={!canDownload}
+                onClick={onDownloadOSM}
+                className={`group flex items-center justify-center gap-2 px-3 py-4 rounded-[20px] font-black text-[10px] uppercase tracking-wider transition-all shadow-xl active:scale-[0.98] ${canDownload
+                  ? 'bg-slate-800 hover:bg-slate-700 text-white border border-white/10 hover:border-blue-500/30'
+                  : 'bg-slate-950 text-slate-700 cursor-not-allowed border border-white/5'
+                  }`}
+                title="Download OpenStreetMap Data"
+              >
+                <Layers className={`w-4 h-4 ${canDownload ? 'group-hover:scale-110 transition-transform' : ''}`} />
+                OSM
               </button>
 
               {/* Download Button */}
               <button
                 disabled={!canDownload}
                 onClick={onDownload}
-                className={`flex-1 group flex items-center justify-center gap-3 py-5 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] transition-all shadow-2xl active:scale-[0.98] ${canDownload
+                className={`flex-[1.5] group flex items-center justify-center gap-2 py-4 rounded-[20px] font-black text-[10px] uppercase tracking-wider transition-all shadow-xl active:scale-[0.98] ${canDownload
                   ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30 ring-2 ring-blue-500/20'
                   : 'bg-slate-950 text-slate-700 cursor-not-allowed border border-white/5'
                   }`}
               >
-                <Download className={`w-5 h-5 ${canDownload ? 'animate-bounce' : ''}`} />
+                <Download className={`w-4 h-4 ${canDownload ? 'animate-bounce' : ''}`} />
                 Extract
               </button>
             </div>

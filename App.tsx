@@ -19,7 +19,6 @@ import { getDirectoryHandle, saveDirectoryHandle, verifyPermission, saveFileToDi
 import MapViewer from './components/MapViewer';
 import ControlPanel from './components/ControlPanel';
 import ModelPreview from './components/ModelPreview';
-import LocationOverlay from './components/LocationOverlay';
 
 const ApiKeyModal: React.FC<{
   isOpen: boolean;
@@ -595,6 +594,34 @@ const App: React.FC = () => {
   };
 
   /**
+   * Download OSM Data
+   */
+  const handleDownloadOSM = () => {
+    if (!selectedPolygon || selectedPolygon.length === 0) return;
+
+    const lats = selectedPolygon.map(p => p[0]);
+    const lons = selectedPolygon.map(p => p[1]);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLon = Math.min(...lons);
+    const maxLon = Math.max(...lons);
+
+    // OSM API uses bbox=minLon,minLat,maxLon,maxLat
+    const url = `https://api.openstreetmap.org/api/0.6/map?bbox=${minLon},${minLat},${maxLon},${maxLat}`;
+
+    // Create a temporary hidden iframe to trigger the download without opening a new tab
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = url;
+    document.body.appendChild(iframe);
+
+    // Clean up independently
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+    }, 60000); // 1 minute timeout to allow download to start
+  };
+
+  /**
    * Direct download without preview
    */
   const handleDownload = async () => {
@@ -797,7 +824,7 @@ const App: React.FC = () => {
         accept=".json"
       />
       {/* Floating Search Hub */}
-      <div className="absolute top-8 left-8 z-[1400] w-[440px] h-12 pointer-events-none" ref={searchRef}>
+      <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[1400] w-[440px] h-12 pointer-events-none" ref={searchRef}>
         <div className="glass-panel rounded-[32px] p-1 flex items-center shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] pointer-events-auto transition-all duration-500 hover:ring-2 hover:ring-blue-500/20 focus-within:ring-2 focus-within:ring-blue-500/50">
           <div className="flex items-center gap-3 px-3 py-1.5 flex-grow min-w-0">
             {isSearching ? <Loader2 className="w-5 h-5 text-blue-400 animate-spin" /> : <Search className="w-5 h-5 text-slate-500" />}
@@ -829,7 +856,7 @@ const App: React.FC = () => {
         </div>
 
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute top-0 left-[450px] w-[300px] glass-panel !bg-slate-800/90 rounded-[24px] overflow-hidden shadow-2xl pointer-events-auto border border-white/10 animate-in fade-in slide-in-from-left-4 duration-500">
+          <div className="absolute top-[60px] left-0 w-[440px] glass-panel !bg-slate-800/90 rounded-[24px] overflow-hidden shadow-2xl pointer-events-auto border border-white/10 animate-in fade-in slide-in-from-top-4 duration-500">
             {suggestions.map((item, index) => (
               <button
                 key={index}
@@ -862,6 +889,7 @@ const App: React.FC = () => {
         onOpenApiKeyModal={() => setShowApiModal(true)}
         hasApiKey={!!apiKey}
         onFileUpload={handleFileUpload}
+        onDownloadOSM={handleDownloadOSM}
       />
 
       {/* API Key Modal */}
@@ -886,7 +914,7 @@ const App: React.FC = () => {
         onConfirmDownload={handleDownloadFromPreview}
         isLoading={isLoadingPreview}
         nanoBananaApiKey={nanoBananaApiKey}
-        locationName={searchQuery}
+        locationName={locationInfo?.fullName || searchQuery}
         onRenderComplete={handleSaveRender}
       />
 
@@ -896,8 +924,8 @@ const App: React.FC = () => {
           flyTo={mapFlyTo}
           clearTrigger={clearTrigger}
           externalPolygon={selectedPolygon}
+          locationName={locationInfo?.shortName || null}
         />
-        <LocationOverlay locationName={locationInfo?.shortName || null} />
       </main>
     </div>
   );

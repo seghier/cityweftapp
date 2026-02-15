@@ -8,9 +8,10 @@ interface MapViewerProps {
     flyTo?: [number, number] | null;
     clearTrigger?: number;
     externalPolygon?: [number, number][] | null;
+    locationName?: string | null;
 }
 
-const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrigger, externalPolygon }) => {
+const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrigger, externalPolygon, locationName }) => {
     const mapRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const onPolygonChangeRef = useRef(onPolygonChange);
@@ -106,6 +107,17 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
         }
     }, [externalPolygon]);
 
+    // Location Label removed as per user request
+    useEffect(() => {
+        if (!mapRef.current) return;
+        // Clean up existing label
+        mapRef.current.eachLayer((l: any) => {
+            if (l.options && l.options.pane === 'markerPane' && l instanceof L.Marker && l.options.icon?.options?.className?.includes('location-label-marker')) {
+                mapRef.current.removeLayer(l);
+            }
+        });
+    }, [locationName, externalPolygon]);
+
     useEffect(() => {
         if (!containerRef.current || mapRef.current) return;
 
@@ -167,6 +179,9 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
                 container.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
                 container.style.overflow = 'hidden';
                 container.style.marginTop = '0';
+                container.style.flexDirection = 'column'; // Vertical layout
+                container.style.width = '36px';
+                container.style.height = 'auto';
 
                 L.DomEvent.disableClickPropagation(container);
 
@@ -297,26 +312,7 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
         map.addControl(new ZoomControl());
         map.addControl(new MapStyleControl());
 
-        // Fix layout to be horizontal [PM Controls] [Zoom Controls] [Map Toggle]
-        setTimeout(() => {
-            const topRightInfo = document.querySelector('.leaflet-top.leaflet-right');
-            if (topRightInfo) {
-                (topRightInfo as HTMLElement).style.display = 'flex';
-                (topRightInfo as HTMLElement).style.flexDirection = 'row';
-                (topRightInfo as HTMLElement).style.alignItems = 'flex-start';
-                (topRightInfo as HTMLElement).style.gap = '10px';
-
-                (topRightInfo as HTMLElement).style.marginTop = '38px';
-                (topRightInfo as HTMLElement).style.marginRight = '10px';
-
-                // Remove individual margins to let gap handle it
-                const children = topRightInfo.querySelectorAll('.leaflet-control');
-                children.forEach((child: any) => {
-                    child.style.marginTop = '0';
-                    child.style.marginRight = '0';
-                });
-            }
-        }, 100);
+        // JS layout hacks removed in favor of CSS below
 
         const calculateArea = (layer: any) => {
             try {
@@ -401,7 +397,141 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
     }, []); // Empty dependency array ensures initialization only happens once
 
     return (
-        <div ref={containerRef} className="fixed inset-0 w-full h-full z-0 cursor-crosshair bg-slate-950" />
+        <>
+            <style>
+                {`
+                /* Override Leaflet Top Right Corner Container Position */
+                .leaflet-top.leaflet-right {
+                    position: absolute !important;
+                    top: 32px !important; /* Matches top-8 */
+                    right: 16px !important; /* Adjusted closer to edge as requested */
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 16px !important;
+                    align-items: center !important;
+                    pointer-events: none !important;
+                    z-index: 999 !important;
+                    bottom: auto !important;
+                    left: auto !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+
+                /* General Control Styling - Dark Glass Theme */
+                .leaflet-top.leaflet-right .leaflet-control {
+                    pointer-events: auto !important;
+                    margin: 0 !important;
+                    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+                    background-color: rgba(15, 23, 42, 0.7) !important; /* Match .glass-panel */
+                    border-radius: 12px !important;
+                    overflow: hidden !important;
+                    clear: none !important;
+                    backdrop-filter: blur(20px) saturate(180%) !important;
+                    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+                }
+
+                /* Force PM Toolbar Vertical */
+                .leaflet-pm-toolbar {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    width: 44px !important;
+                    height: auto !important;
+                }
+                .leaflet-pm-toolbar .leaflet-buttons-control-button {
+                    width: 44px !important; 
+                    height: 44px !important;
+                    line-height: 44px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    border-bottom: none !important;
+                    border-right: none !important;
+                    color: #e2e8f0 !important; /* slate-200 */
+                    background-color: transparent !important;
+                }
+                /* Target the icon specifically to scale it down and invert color for dark mode */
+                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-edit,
+                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-delete,
+                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-drag,
+                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-marker,
+                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-polygon,
+                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-polyline,
+                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-circle,
+                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-rectangle {
+                     transform: scale(0.7) !important;
+                     filter: invert(1) brightness(1.5) !important; /* Make icons white */
+                }
+                .leaflet-pm-toolbar .leaflet-buttons-control-button:hover {
+                    background-color: rgba(255, 255, 255, 0.1) !important;
+                    color: #ffffff !important;
+                }
+                .leaflet-pm-toolbar .leaflet-buttons-control-button:last-child {
+                    border-bottom: none !important;
+                }
+
+                /* Custom Zoom Vertical */
+                .custom-zoom-control {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    width: 44px !important;
+                    height: auto !important;
+                }
+                .custom-zoom-control a {
+                    width: 44px !important;
+                    height: 44px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    border-bottom: none !important;
+                    border-left: none !important;
+                    color: #e2e8f0 !important; /* slate-200 */
+                    transition: all 0.2s !important;
+                    background-color: transparent !important;
+                }
+                .custom-zoom-control a:hover {
+                    background-color: rgba(255, 255, 255, 0.1) !important;
+                    color: #ffffff !important; 
+                }
+                .custom-zoom-control a:last-child {
+                    border-bottom: none !important;
+                }
+
+                /* Map Style Control */
+                .custom-map-style-control {
+                    width: 44px !important;
+                    height: 44px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    border-radius: 12px !important;
+                }
+                .custom-map-style-control a {
+                    width: 100% !important;
+                    height: 100% !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    border: none !important;
+                    color: #e2e8f0 !important; /* slate-200 */
+                    background-color: transparent !important;
+                }
+                .custom-map-style-control a:hover {
+                     background-color: rgba(255, 255, 255, 0.1) !important;
+                     color: #ffffff !important;
+                }
+
+                /* Remove default leaflet bar styles that interfere */
+                .leaflet-bar {
+                    border: none !important;
+                }
+                .leaflet-bar a {
+                    border-radius: 0 !important;
+                }
+                `}
+            </style>
+            <div ref={containerRef} className="fixed inset-0 w-full h-full z-0 cursor-crosshair bg-slate-950" />
+        </>
     );
 };
 
