@@ -120,11 +120,18 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
             preferCanvas: true
         });
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        const voyagerLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
             maxZoom: 20,
             subdomains: 'abcd',
             keepBuffer: 8
         }).addTo(map);
+
+        const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: 'Tiles &copy; Esri'
+        });
+
+        let isSatellite = false;
 
         map.pm.addControls({
             position: 'topright',
@@ -236,9 +243,61 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
             }
         });
 
-        map.addControl(new ZoomControl());
+        // Custom Map Style Control
+        const MapStyleControl = L.Control.extend({
+            options: { position: 'topright' },
+            onAdd: () => {
+                const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control custom-map-style-control');
+                container.style.backgroundColor = 'white';
+                container.style.borderRadius = '12px';
+                container.style.border = '1px solid #ccc';
+                container.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
+                container.style.marginTop = '10px'; // Spacing between controls
+                container.style.cursor = 'pointer';
 
-        // Fix layout to be horizontal [PM Controls] [Zoom Controls]
+                L.DomEvent.disableClickPropagation(container);
+
+                const btn = L.DomUtil.create('a', '', container);
+                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>';
+                btn.title = 'Toggle Map Style';
+                btn.href = '#';
+                btn.style.width = '36px';
+                btn.style.height = '36px';
+                btn.style.display = 'flex';
+                btn.style.alignItems = 'center';
+                btn.style.justifyContent = 'center';
+                btn.style.color = '#444';
+
+                btn.addEventListener('mouseenter', () => {
+                    btn.style.backgroundColor = '#f4f4f4';
+                    btn.style.color = '#000';
+                });
+                btn.addEventListener('mouseleave', () => {
+                    btn.style.backgroundColor = 'white';
+                    btn.style.color = '#444';
+                });
+
+                L.DomEvent.on(btn, 'click', (e: any) => {
+                    L.DomEvent.stop(e);
+                    if (isSatellite) {
+                        map.removeLayer(satelliteLayer);
+                        map.addLayer(voyagerLayer);
+                    } else {
+                        map.removeLayer(voyagerLayer);
+                        map.addLayer(satelliteLayer);
+                    }
+                    isSatellite = !isSatellite;
+                });
+
+                return container;
+            }
+        });
+
+        // Add controls to map
+        map.addControl(new ZoomControl());
+        map.addControl(new MapStyleControl());
+
+        // Fix layout to be horizontal [PM Controls] [Zoom Controls] [Map Toggle]
         setTimeout(() => {
             const topRightInfo = document.querySelector('.leaflet-top.leaflet-right');
             if (topRightInfo) {
@@ -246,10 +305,7 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
                 (topRightInfo as HTMLElement).style.flexDirection = 'row';
                 (topRightInfo as HTMLElement).style.alignItems = 'flex-start';
                 (topRightInfo as HTMLElement).style.gap = '10px';
-                // Also ensure the container has the margin-top if needed (from previous steps user might have liked the 84px offset)
-                // But usually controls are just top-right.
-                // Let's add slight top margin to clear search bar if it overlaps, though search is left.
-                // The PM controls usually have some margin.
+
                 (topRightInfo as HTMLElement).style.marginTop = '38px';
                 (topRightInfo as HTMLElement).style.marginRight = '10px';
 

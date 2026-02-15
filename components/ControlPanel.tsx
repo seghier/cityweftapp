@@ -94,8 +94,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             <button
               onClick={onOpenApiKeyModal}
               className={`group flex items-center justify-center gap-3 py-4 rounded-[24px] border transition-all duration-300 ${hasApiKey
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)] hover:bg-emerald-500/20'
-                  : 'bg-rose-500/10 border-rose-500/20 text-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.15)] animate-pulse hover:bg-rose-500/20'
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)] hover:bg-emerald-500/20'
+                : 'bg-rose-500/10 border-rose-500/20 text-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.15)] animate-pulse hover:bg-rose-500/20'
                 }`}
             >
               <div className={`w-2 h-2 rounded-full ${hasApiKey ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]'}`} />
