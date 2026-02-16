@@ -249,6 +249,7 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
     setIsSunStudyEnabled(false);
     setShowSolarPath(false);
     setIsClimateEnabled(false);
+    setRenderedImageUrl(null); // Clear previous render
   }, [geometryData]);
 
   // Update Grid/Layer Visibility

@@ -113,7 +113,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                   }`}
               >
                 <div className={`w-2 h-2 rounded-full ${hasApiKey ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]'}`} />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em]">API Keys</span>
+                <span className="text-xs font-black uppercase tracking-[0.2em]">API Keys</span>
               </button>
 
               <button
@@ -121,7 +121,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                 className="group flex items-center justify-center gap-3 py-4 rounded-[24px] border border-blue-600/30 bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:border-blue-600/50 hover:text-blue-300 transition-all shadow-[0_0_15px_rgba(37,99,235,0.1)] hover:shadow-[0_0_25px_rgba(37,99,235,0.2)]"
               >
                 <HardDrive className="w-4 h-4" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Load File</span>
+                <span className="text-xs font-black uppercase tracking-[0.2em]">Load File</span>
               </button>
             </div>
           </div>
@@ -289,7 +289,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
           {/* Action Footer */}
           <div className="px-10 py-6 bg-[#020617] border-t border-white/5 space-y-4">
-            <div className="flex justify-between items-end px-2">
+            <div className="flex justify-between items-end">
               <div className="space-y-2">
                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">Selection Scope</p>
                 <p className={`text-3xl font-black tracking-tighter ${selectedArea > 5 ? 'text-rose-500 animate-pulse' : 'text-white'}`}>
@@ -299,7 +299,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               {selectedArea > 0 && (
                 <button
                   onClick={onClearSelection}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-rose-500/10 border border-white/5 hover:border-rose-500/30 text-slate-400 hover:text-rose-500 transition-all text-[10px] font-black uppercase tracking-widest"
+                  className="group flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-rose-500/10 border border-white/5 hover:border-rose-500/30 text-slate-400 hover:text-rose-500 transition-all text-[10px] font-black uppercase tracking-widest w-44"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   Clear Selection
@@ -320,7 +320,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                 <button
                   disabled={!canDownload}
                   onClick={onDownloadOSM}
-                  className={`flex-1 group flex items-center justify-center gap-2 py-4 rounded-[20px] font-black text-[10px] uppercase tracking-wider transition-all shadow-xl active:scale-[0.98] ${canDownload
+                  className={`flex-1 group flex items-center justify-center gap-2 py-4 rounded-[20px] font-black text-xs uppercase tracking-wider transition-all shadow-xl active:scale-[0.98] ${canDownload
                     ? 'bg-slate-800 hover:bg-slate-700 text-white border border-white/10 hover:border-blue-500/30'
                     : 'bg-slate-950 text-slate-700 cursor-not-allowed border border-white/5'
                     }`}
@@ -334,7 +334,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                 <button
                   disabled={!canDownload}
                   onClick={onDownload}
-                  className={`flex-1 group flex items-center justify-center gap-2 py-4 rounded-[20px] font-black text-[10px] uppercase tracking-wider transition-all shadow-xl active:scale-[0.98] ${canDownload
+                  className={`flex-1 group flex items-center justify-center gap-2 py-4 rounded-[20px] font-black text-xs uppercase tracking-wider transition-all shadow-xl active:scale-[0.98] ${canDownload
                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30 ring-2 ring-blue-500/20'
                     : 'bg-slate-950 text-slate-700 cursor-not-allowed border border-white/5'
                     }`}

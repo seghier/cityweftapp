@@ -22,3 +22,44 @@ textarea {
 .animate-spin-slow {
   animation: spin 3s linear infinite;
 }
+
+@keyframes drop-glow {
+  0% {
+    filter: drop-shadow(-2px 0 5px rgba(59, 130, 246, 0.8));
+    /* Blue Min */
+  }
+
+  16.66% {
+    filter: drop-shadow(-8px 0 20px rgba(59, 130, 246, 1.0));
+    /* Blue Max */
+  }
+
+  33.33% {
+    filter: drop-shadow(-2px 0 5px rgba(168, 85, 247, 0.8));
+    /* Purple Min */
+  }
+
+  50% {
+    filter: drop-shadow(-8px 0 20px rgba(168, 85, 247, 1.0));
+    /* Purple Max */
+  }
+
+  66.66% {
+    filter: drop-shadow(-2px 0 5px rgba(52, 211, 153, 0.8));
+    /* Emerald Min */
+  }
+
+  83.33% {
+    filter: drop-shadow(-8px 0 20px rgba(52, 211, 153, 1.0));
+    /* Emerald Max */
+  }
+
+  100% {
+    filter: drop-shadow(-2px 0 5px rgba(59, 130, 246, 0.8));
+    /* Loop to Blue Min */
+  }
+}
+
+.animate-drop-glow {
+  animation: drop-glow 6.5s infinite linear;
+}

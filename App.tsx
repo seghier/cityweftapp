@@ -860,7 +860,7 @@ const App: React.FC = () => {
         <div
           ref={sidebarRef}
           onClick={() => handleTabChange(activeTab === 'map' ? 'model' : 'map')}
-          className="fixed right-0 h-[400px] w-16 cursor-pointer transition-transform duration-300 translate-x-[110%] group-hover:translate-x-0 flex items-center justify-center will-change-transform"
+          className={`fixed right-0 h-[400px] w-16 cursor-pointer transition-transform duration-300 translate-x-[calc(100%-6px)] group-hover:translate-x-0 group-hover:animate-none flex items-center justify-center will-change-transform ${activeTab === 'map' ? 'animate-drop-glow' : ''}`}
           style={{
             top: 'calc(50% - 200px)', // Initial center
             // Custom property for spotlight
@@ -1041,21 +1041,20 @@ const App: React.FC = () => {
           />
         </div>
 
-        {activeTab === 'model' && (
-          <div className="absolute inset-0 w-full h-full z-20 bg-slate-950 animate-in fade-in duration-500">
-            <ModelPreview
-              isOpen={true} // Always open when tab is active
-              onClose={() => setActiveTab('map')}
-              geometryData={previewData}
-              onConfirmDownload={handleDownloadFromPreview}
-              isLoading={isLoadingPreview || status === AppStatus.DOWNLOADING || status === AppStatus.PREPARING}
-              downloadProgress={progress}
-              nanoBananaApiKey={nanoBananaApiKey}
-              locationName={locationInfo?.fullName || searchQuery}
-              onRenderComplete={handleSaveRender}
-            />
-          </div>
-        )}
+        {/* Model Preview - Always mounted to persist state, visibility controlled by CSS */}
+        <div className={`absolute inset-0 w-full h-full bg-slate-950 transition-all duration-500 ease-in-out ${activeTab === 'model' ? 'z-20 opacity-100 pointer-events-auto' : 'z-0 opacity-0 pointer-events-none'}`}>
+          <ModelPreview
+            isOpen={true} // Always open when tab is active
+            onClose={() => setActiveTab('map')}
+            geometryData={previewData}
+            onConfirmDownload={handleDownloadFromPreview}
+            isLoading={isLoadingPreview || status === AppStatus.DOWNLOADING || status === AppStatus.PREPARING}
+            downloadProgress={progress}
+            nanoBananaApiKey={nanoBananaApiKey}
+            locationName={locationInfo?.fullName || searchQuery}
+            onRenderComplete={handleSaveRender}
+          />
+        </div>
       </main>
     </div>
   );
