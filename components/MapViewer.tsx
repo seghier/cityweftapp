@@ -15,6 +15,7 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
     const mapRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const onPolygonChangeRef = useRef(onPolygonChange);
+    const isInternalUpdate = useRef(false);
 
     // Keep the ref up to date
     useEffect(() => {
@@ -43,6 +44,11 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
 
     // Handle external polygon update (e.g. from file load)
     useEffect(() => {
+        if (isInternalUpdate.current) {
+            isInternalUpdate.current = false;
+            return;
+        }
+
         if (mapRef.current && externalPolygon && externalPolygon.length > 0) {
             // Clear existing layers
             mapRef.current.eachLayer((l: any) => {
@@ -88,6 +94,7 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
             };
 
             const updateInfo = () => {
+                isInternalUpdate.current = true;
                 const area = calculateArea(polygonLayer);
                 const coords = getCoords(polygonLayer);
                 onPolygonChangeRef.current(coords, area);
@@ -96,7 +103,10 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
             // Wire up completion events so area updates only when the action is finished
             polygonLayer.on('pm:edit', updateInfo);
             polygonLayer.on('pm:dragend', updateInfo);
-            polygonLayer.on('pm:remove', () => onPolygonChangeRef.current([], 0));
+            polygonLayer.on('pm:remove', () => {
+                isInternalUpdate.current = true;
+                onPolygonChangeRef.current([], 0)
+            });
 
             // Fit bounds to focus on the polygon
             mapRef.current.fitBounds(polygonLayer.getBounds(), {
@@ -124,6 +134,8 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
         const map = L.map(containerRef.current, {
             center: [27.0, 15.0], // North Africa
             zoom: 4,
+            minZoom: 3,
+            maxBounds: [[-85, -180], [85, 180]],
             zoomControl: false,
             attributionControl: false,
             fadeAnimation: true,
@@ -158,60 +170,34 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
             removalMode: true,
             rotateMode: false,
             editMode: true,
-            dragMode: true
+            dragMode: true,
+            oneBlock: true
         });
 
         map.pm.setGlobalOptions({
             allowSelfIntersection: false,
             midPins: false,
-            draggable: true
+            draggable: true,
+            tooltips: false, // Disable tooltips
+            snappable: true
         });
 
-        // Custom Zoom Control
-        const ZoomControl = L.Control.extend({
+        // Unified Control Bar
+        const UnifiedControls = L.Control.extend({
             options: { position: 'topright' },
             onAdd: () => {
-                const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control custom-zoom-control');
-                container.style.display = 'flex';
-                container.style.backgroundColor = 'white';
-                container.style.borderRadius = '12px';
-                container.style.border = '1px solid #ccc';
-                container.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
-                container.style.overflow = 'hidden';
-                container.style.marginTop = '0';
-                container.style.flexDirection = 'column'; // Vertical layout
-                container.style.width = '36px';
-                container.style.height = 'auto';
+                const container = L.DomUtil.create('div', 'leaflet-control unified-map-controls');
 
+                // Prevent click propagation
                 L.DomEvent.disableClickPropagation(container);
+                L.DomEvent.disableScrollPropagation(container);
 
-                const createButton = (icon: string, title: string, onClick: () => void) => {
-                    const btn = L.DomUtil.create('a', '', container);
-                    btn.innerHTML = icon;
+                // Helper to create a button
+                const createBtn = (iconHtml: string, title: string, onClick: () => void, isActive: boolean = false) => {
+                    const btn = L.DomUtil.create('div', 'unified-control-btn', container);
+                    btn.innerHTML = iconHtml;
                     btn.title = title;
-                    btn.href = '#';
-                    btn.style.width = '36px';
-                    btn.style.height = '36px';
-                    btn.style.display = 'flex';
-                    btn.style.alignItems = 'center';
-                    btn.style.justifyContent = 'center';
-                    btn.style.color = '#444';
-                    btn.style.cursor = 'pointer';
-                    btn.style.backgroundColor = 'white';
-                    btn.style.border = 'none';
-                    btn.style.transition = 'all 0.2s';
-
-                    // Override global leaflet-bar a+a border-left
-                    btn.style.setProperty('border-left', 'none', 'important');
-
-                    btn.addEventListener('mouseenter', () => {
-                        btn.style.backgroundColor = '#f4f4f4';
-                        btn.style.color = '#000';
-                    });
-                    btn.addEventListener('mouseleave', () => {
-                        btn.style.backgroundColor = 'white';
-                        btn.style.color = '#444';
-                    });
+                    if (isActive) btn.classList.add('active');
 
                     L.DomEvent.on(btn, 'click', (e: any) => {
                         L.DomEvent.stop(e);
@@ -221,20 +207,101 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
                     return btn;
                 };
 
-                createButton(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>',
+                // Helper for Separator
+                const createSeparator = () => {
+                    L.DomUtil.create('div', 'control-separator', container);
+                };
+
+                // --- Group 1: Geoman Tools ---
+
+                // Draw Rectangle
+                const drawRectBtn = createBtn(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>',
+                    'Draw Rectangle',
+                    () => {
+                        // Toggle Draw Rectangle
+                        if (map.pm.globalDrawModeEnabled()) {
+                            map.pm.disableDraw('Rectangle');
+                        } else {
+                            map.pm.enableDraw('Rectangle', {
+                                snappable: true,
+                                tooltips: false
+                            });
+                        }
+                    }
+                );
+
+                // Edit Layers
+                const editBtn = createBtn(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+                    'Edit Layers',
+                    () => {
+                        map.pm.toggleGlobalEditMode();
+                    }
+                );
+
+                // Drag Layers
+                const dragBtn = createBtn(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="15 19 12 22 9 19"></polyline><polyline points="19 9 22 12 19 15"></polyline><circle cx="12" cy="12" r="3"></circle></svg>',
+                    'Drag Layers',
+                    () => {
+                        map.pm.toggleGlobalDragMode();
+                    }
+                );
+
+                // Delete Layers
+                const deleteBtn = createBtn(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>',
+                    'Remove Layers',
+                    () => {
+                        map.pm.toggleGlobalRemovalMode();
+                    }
+                );
+
+                // Listen to map events to update active state of buttons
+                const updateActiveStates = () => {
+                    const drawEnabled = map.pm.globalDrawModeEnabled();
+                    const editEnabled = map.pm.globalEditModeEnabled();
+                    const dragEnabled = map.pm.globalDragModeEnabled();
+                    const removalEnabled = map.pm.globalRemovalModeEnabled();
+
+                    drawRectBtn.style.color = drawEnabled ? '#3b82f6' : 'inherit';
+                    drawRectBtn.style.background = drawEnabled ? 'rgba(59, 130, 246, 0.2)' : 'transparent';
+
+                    editBtn.style.color = editEnabled ? '#3b82f6' : 'inherit';
+                    editBtn.style.background = editEnabled ? 'rgba(59, 130, 246, 0.2)' : 'transparent';
+
+                    dragBtn.style.color = dragEnabled ? '#3b82f6' : 'inherit';
+                    dragBtn.style.background = dragEnabled ? 'rgba(59, 130, 246, 0.2)' : 'transparent';
+
+                    deleteBtn.style.color = removalEnabled ? '#ef4444' : 'inherit';
+                    deleteBtn.style.background = removalEnabled ? 'rgba(239, 68, 68, 0.2)' : 'transparent';
+                };
+
+                map.on('pm:globaldrawmodetoggled pm:globaleditmodetoggled pm:globaldragmodetoggled pm:globalremovalmodetoggled', updateActiveStates);
+
+
+                createSeparator();
+
+                // --- Group 2: Zoom Controls ---
+
+                // Zoom In
+                createBtn(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>',
                     'Zoom In',
                     () => map.zoomIn()
                 );
 
-                createButton(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path><line x1="8" y1="11" x2="14" y2="11"></line></svg>',
+                // Zoom Out
+                createBtn(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="8" y1="11" x2="14" y2="11"></line></svg>',
                     'Zoom Out',
                     () => map.zoomOut()
                 );
 
-                createButton(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>',
+                // Fit Bounds
+                createBtn(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>',
                     'Zoom to Fit',
                     () => {
                         let hasSelection = false;
@@ -254,63 +321,34 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
                     }
                 );
 
-                return container;
-            }
-        });
+                createSeparator();
 
-        // Custom Map Style Control
-        const MapStyleControl = L.Control.extend({
-            options: { position: 'topright' },
-            onAdd: () => {
-                const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control custom-map-style-control');
-                container.style.backgroundColor = 'white';
-                container.style.borderRadius = '12px';
-                container.style.border = '1px solid #ccc';
-                container.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
-                container.style.marginTop = '10px'; // Spacing between controls
-                container.style.cursor = 'pointer';
-
-                L.DomEvent.disableClickPropagation(container);
-
-                const btn = L.DomUtil.create('a', '', container);
-                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>';
-                btn.title = 'Toggle Map Style';
-                btn.href = '#';
-                btn.style.width = '36px';
-                btn.style.height = '36px';
-                btn.style.display = 'flex';
-                btn.style.alignItems = 'center';
-                btn.style.justifyContent = 'center';
-                btn.style.color = '#444';
-
-                btn.addEventListener('mouseenter', () => {
-                    btn.style.backgroundColor = '#f4f4f4';
-                    btn.style.color = '#000';
-                });
-                btn.addEventListener('mouseleave', () => {
-                    btn.style.backgroundColor = 'white';
-                    btn.style.color = '#444';
-                });
-
-                L.DomEvent.on(btn, 'click', (e: any) => {
-                    L.DomEvent.stop(e);
-                    if (isSatellite) {
-                        map.removeLayer(satelliteLayer);
-                        map.addLayer(voyagerLayer);
-                    } else {
-                        map.removeLayer(voyagerLayer);
-                        map.addLayer(satelliteLayer);
+                // --- Group 3: Style Toggle ---
+                createBtn(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
+                    'Toggle Map Style',
+                    () => {
+                        if (isSatellite) {
+                            map.removeLayer(satelliteLayer);
+                            map.addLayer(voyagerLayer);
+                        } else {
+                            map.removeLayer(voyagerLayer);
+                            map.addLayer(satelliteLayer);
+                        }
+                        isSatellite = !isSatellite;
                     }
-                    isSatellite = !isSatellite;
-                });
+                );
 
                 return container;
             }
         });
 
-        // Add controls to map
-        map.addControl(new ZoomControl());
-        map.addControl(new MapStyleControl());
+        // Add the Unified Control to the map
+        map.addControl(new UnifiedControls());
+
+        // We no longer hack the DOM moving buttons. We created our own.
+        // But we DO need to ensure the default Geoman controls (if any) are hidden.
+        // This is handled by CSS: .leaflet-pm-toolbar { display: none !important; }
 
         // JS layout hacks removed in favor of CSS below
 
@@ -349,7 +387,11 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
             const workingLayer = e.workingLayer;
             if (workingLayer) {
                 workingLayer.on('pm:change', () => {
+                    // This is just real-time area update, arguably internal but doesn't affect externalPolygon unless we persist partials
+                    // Usually we only persist on create.
                     const area = calculateArea(workingLayer);
+                    // We don't push coords here usually, or if we do, we should mark internal
+                    isInternalUpdate.current = true;
                     onPolygonChangeRef.current([], area);
                 });
             }
@@ -374,6 +416,7 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
             });
 
             const updateInfo = () => {
+                isInternalUpdate.current = true;
                 const area = calculateArea(layer);
                 const coords = getCoords(layer);
                 onPolygonChangeRef.current(coords, area);
@@ -382,10 +425,16 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
             updateInfo();
             layer.on('pm:edit', updateInfo);
             layer.on('pm:dragend', updateInfo);
-            layer.on('pm:remove', () => onPolygonChangeRef.current([], 0));
+            layer.on('pm:remove', () => {
+                isInternalUpdate.current = true;
+                onPolygonChangeRef.current([], 0)
+            });
         });
 
-        map.on('pm:remove', () => onPolygonChangeRef.current([], 0));
+        map.on('pm:remove', () => {
+            isInternalUpdate.current = true;
+            onPolygonChangeRef.current([], 0)
+        });
 
         mapRef.current = map;
         return () => {
@@ -403,130 +452,123 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
                 /* Override Leaflet Top Right Corner Container Position */
                 .leaflet-top.leaflet-right {
                     position: absolute !important;
-                    top: 32px !important; /* Matches top-8 */
-                    right: 16px !important; /* Adjusted closer to edge as requested */
+                    bottom: 32px !important; /* Matches footer spacing */
+                    left: 50% !important;
+                    transform: translateX(-50%) !important;
+                    top: auto !important;
+                    right: auto !important;
                     display: flex !important;
-                    flex-direction: column !important;
-                    gap: 16px !important;
-                    align-items: center !important;
+                    flex-direction: row !important; /* Horizontal layout */
+                    gap: 0 !important; /* No gap between controls, they are unified */
+                    align-items: flex-end !important;
                     pointer-events: none !important;
                     z-index: 999 !important;
-                    bottom: auto !important;
-                    left: auto !important;
                     margin: 0 !important;
                     padding: 0 !important;
+                    width: 440px !important;
                 }
 
-                /* General Control Styling - Dark Glass Theme */
-                .leaflet-top.leaflet-right .leaflet-control {
+                /* Unified Control Styling - Matches Search Bar */
+                .unified-map-controls {
                     pointer-events: auto !important;
                     margin: 0 !important;
                     border: 1px solid rgba(255, 255, 255, 0.08) !important;
-                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
-                    background-color: rgba(15, 23, 42, 0.7) !important; /* Match .glass-panel */
-                    border-radius: 12px !important;
+                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3) !important;
+                    background-color: rgba(15, 23, 42, 0.7) !important; /* Glass effect */
+                    border-radius: 32px !important; /* Matches search bar pill shape */
                     overflow: hidden !important;
                     clear: none !important;
                     backdrop-filter: blur(20px) saturate(180%) !important;
                     -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+                    display: flex !important;
+                    flex-direction: row !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    padding: 0 16px !important;
+                    height: 48px !important; /* Match search bar height */
+                    width: 100% !important;
                 }
 
-                /* Force PM Toolbar Vertical */
-                .leaflet-pm-toolbar {
-                    display: flex !important;
-                    flex-direction: column !important;
-                    width: 44px !important;
-                    height: auto !important;
+                /* Vertical Separator */
+                .control-separator {
+                    width: 1px !important;
+                height: 24px !important;
+                background-color: rgba(255, 255, 255, 0.1) !important;
+                margin: 0 4px !important;
                 }
-                .leaflet-pm-toolbar .leaflet-buttons-control-button {
-                    width: 44px !important; 
-                    height: 44px !important;
-                    line-height: 44px !important;
+
+                .unified-control-btn,
+                /* General Button Styling inside Unified Control */
+                .unified-control-btn {
+                    width: 40px !important;
+                    height: 40px !important;
+                    line-height: 40px !important;
                     display: flex !important;
                     align-items: center !important;
                     justify-content: center !important;
-                    border-bottom: none !important;
-                    border-right: none !important;
+                    border: none !important;
                     color: #e2e8f0 !important; /* slate-200 */
                     background-color: transparent !important;
+                    transition: all 0.2s !important;
+                    border-radius: 50% !important; /* Circles */
+                    cursor: pointer !important;
                 }
-                /* Target the icon specifically to scale it down and invert color for dark mode */
-                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-edit,
-                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-delete,
-                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-drag,
-                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-marker,
-                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-polygon,
-                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-polyline,
-                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-circle,
-                .leaflet-pm-toolbar .leaflet-buttons-control-button .leaflet-pm-icon-rectangle {
-                     transform: scale(0.7) !important;
-                     filter: invert(1) brightness(1.5) !important; /* Make icons white */
-                }
-                .leaflet-pm-toolbar .leaflet-buttons-control-button:hover {
+
+                .unified-control-btn:hover {
                     background-color: rgba(255, 255, 255, 0.1) !important;
                     color: #ffffff !important;
                 }
-                .leaflet-pm-toolbar .leaflet-buttons-control-button:last-child {
-                    border-bottom: none !important;
+                
+                /* Icon Scale fix */
+                .unified-control-btn svg {
+                    transform: scale(0.9);
                 }
 
-                /* Custom Zoom Vertical */
-                .custom-zoom-control {
-                    display: flex !important;
-                    flex-direction: column !important;
-                    width: 44px !important;
-                    height: auto !important;
-                }
-                .custom-zoom-control a {
-                    width: 44px !important;
-                    height: 44px !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    border-bottom: none !important;
-                    border-left: none !important;
-                    color: #e2e8f0 !important; /* slate-200 */
-                    transition: all 0.2s !important;
-                    background-color: transparent !important;
-                }
-                .custom-zoom-control a:hover {
-                    background-color: rgba(255, 255, 255, 0.1) !important;
-                    color: #ffffff !important; 
-                }
-                .custom-zoom-control a:last-child {
-                    border-bottom: none !important;
+                /* Active State for buttons (Draw/Edit/Drag/Delete) */
+                .unified-control-btn.active {
+                    background-color: rgba(59, 130, 246, 0.2) !important;
+                    color: #3b82f6 !important;
                 }
 
-                /* Map Style Control */
-                .custom-map-style-control {
-                    width: 44px !important;
-                    height: 44px !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    border-radius: 12px !important;
+                /* Hide Original Geoman Toolbar Container if it still persists */
+                .leaflet-pm-toolbar {
+                    display: none !important;
                 }
-                .custom-map-style-control a {
-                    width: 100% !important;
-                    height: 100% !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    border: none !important;
-                    color: #e2e8f0 !important; /* slate-200 */
-                    background-color: transparent !important;
-                }
-                .custom-map-style-control a:hover {
-                     background-color: rgba(255, 255, 255, 0.1) !important;
-                     color: #ffffff !important;
-                }
-
-                /* Remove default leaflet bar styles that interfere */
+                
+                /* Override Leaflet Bar Defaults */
                 .leaflet-bar {
                     border: none !important;
+                    box-shadow: none !important;
                 }
+                
                 .leaflet-bar a {
                     border-radius: 0 !important;
+                    border: none !important;
+                }
+                
+                /* Icon Scale fix for cleaner look */
+                .unified-control-btn svg {
+                    width: 24px !important;
+                    height: 24px !important;
+                    opacity: 0.92;
+                }
+                .unified-control-btn:hover svg {
+                    opacity: 1;
+                }
+                
+                /* Unified Control Text Color */
+                .unified-map-controls {
+                    color: inherit !important;
+                }
+
+                /* Force Hide Geoman Tooltips */
+                .leaflet-pm-tooltip {
+                    display: none !important;
+                }
+
+                /* Force Hide Geoman Action Buttons (Finish, Cancel) */
+                .leaflet-pm-actions-container {
+                    display: none !important;
                 }
                 `}
             </style>
@@ -536,3 +578,5 @@ const MapViewer: React.FC<MapViewerProps> = ({ onPolygonChange, flyTo, clearTrig
 };
 
 export default MapViewer;
+
+

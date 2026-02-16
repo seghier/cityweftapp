@@ -46,7 +46,9 @@ interface ModelPreviewProps {
   isLoading?: boolean;
   nanoBananaApiKey?: string;
   locationName?: string;
+
   onRenderComplete?: (imageUrl: string) => void;
+  downloadProgress?: number;
 }
 
 const COLORS = {
@@ -97,7 +99,9 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
   isLoading = false,
   nanoBananaApiKey,
   locationName,
-  onRenderComplete
+
+  onRenderComplete,
+  downloadProgress = 0
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -1486,415 +1490,436 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
-      <div className="glass-panel w-full max-w-7xl h-[90vh] rounded-[40px] shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
-        {/* Header with Tabs */}
-        <div className="flex items-center justify-between p-6 border-b border-white/5 relative">
-          <div className="flex items-center gap-4">
-            <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-3">
-              <Eye className="w-6 h-6 text-blue-500" />
-              Model Preview
-            </h2>
+    <div className="w-full h-full flex flex-col relative bg-slate-950">
+      <button
+        onClick={onClose}
+        className="absolute top-6 right-6 z-50 p-2 bg-slate-900/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition-colors border border-white/10 backdrop-blur-md"
+      >
+        <X className="w-5 h-5" />
+      </button>
+
+
+      {/* Content Area */}
+      <div className="flex-1 relative bg-slate-950 overflow-hidden">
+
+        {/* 3D Viewport */}
+        {(!geometryData && isLoading) && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none">
+            <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
+            <p className="text-slate-400 font-mono text-sm uppercase tracking-widest animate-pulse">Loading Geometry...</p>
           </div>
-
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3">
-            <div className="flex bg-slate-900/50 rounded-lg p-1">
-              <button
-                onClick={() => setActiveTab('3d')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === '3d'
-                  ? 'bg-blue-500 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white'
-                  }`}
-              >
-                <Box className="w-3.5 h-3.5" />
-                3D View
-              </button>
-              <button
-                onClick={() => setActiveTab('render')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'render'
-                  ? 'bg-purple-500 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white'
-                  }`}
-              >
-                <ImageIcon className="w-3.5 h-3.5" />
-                Render
-              </button>
-            </div>
-
-            {activeTab === 'render' && (
-              <button
-                onClick={handleOpenPromptEditor}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md text-xs font-bold transition-all border border-white/10 animate-in fade-in zoom-in duration-200"
-                title="Edit Rendering Prompt"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                Edit Prompt
-              </button>
-            )}
-          </div>
-
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content Area */}
-        <div className="flex-1 relative bg-slate-950 overflow-hidden">
-
-          {/* 3D Viewport */}
-          {(!geometryData && isLoading) && (
-            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none">
-              <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
-              <p className="text-slate-400 font-mono text-sm uppercase tracking-widest animate-pulse">Loading Geometry...</p>
-            </div>
-          )}
-          <div className={`absolute inset-0 ${activeTab === '3d' ? 'visible' : 'invisible'}`} ref={containerRef}>
-            {/* 3D Canvas is appended here by existing useEffect */}
+        )}
+        <div className={`absolute inset-0 ${activeTab === '3d' ? 'visible' : 'invisible'}`} ref={containerRef}>
+          {/* 3D Canvas is appended here by existing useEffect */}
 
 
 
 
 
-            {/* Layer Control Panel */}
-            <div className={`absolute left-6 top-6 bottom-6 items-start transition-all duration-300 z-10 flex gap-2 pointer-events-none ${showLayers ? 'translate-x-0' : '-translate-x-[calc(100%-40px)]'}`}>
-              <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-xl transition-all pointer-events-auto flex flex-col ${showLayers ? 'w-64 h-full' : 'w-0 h-0 p-0 opacity-0 overflow-hidden'}`}>
-                <div className="flex items-center gap-2 mb-2 text-slate-400 px-4 pt-4 pb-3 border-b border-white/5 shrink-0">
-                  <Layers className="w-4 h-4" />
-                  <span className="text-xs font-black uppercase tracking-widest">Scene Layers</span>
-                </div>
-                <div className="space-y-2 overflow-y-auto px-4 flex-1 min-h-0">
-                  {[
-                    { id: 'buildings', label: 'Buildings', hasSublayers: false },
-                    { id: 'surface', label: 'Surface & Roads', hasSublayers: true },
-                    { id: 'vegetation', label: 'Vegetation', hasSublayers: false },
-                    { id: 'infrastructure', label: 'Infrastructure', hasSublayers: false },
-                    { id: 'barriers', label: 'Barriers', hasSublayers: false },
-                    { id: 'topography', label: 'Topography', hasSublayers: false }
-                  ].map(layer => {
-                    const isLayerVisible = layer.id === 'surface'
-                      ? (layerVisibility.surface as any)._group
-                      : (layerVisibility as any)[layer.id];
+          {/* Layer Control Panel */}
+          <div className={`absolute left-6 top-6 bottom-6 items-start transition-all duration-300 z-10 flex gap-2 pointer-events-none ${showLayers ? 'translate-x-0' : '-translate-x-[calc(100%-40px)]'}`}>
+            <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-xl transition-all pointer-events-auto flex flex-col ${showLayers ? 'w-64 h-full' : 'w-0 h-0 p-0 opacity-0 overflow-hidden'}`}>
+              <div className="flex items-center gap-2 mb-2 text-slate-400 px-4 pt-4 pb-3 border-b border-white/5 shrink-0">
+                <Layers className="w-4 h-4" />
+                <span className="text-xs font-black uppercase tracking-widest">Scene Layers</span>
+              </div>
+              <div className="space-y-2 overflow-y-auto px-4 flex-1 min-h-0">
+                {[
+                  { id: 'buildings', label: 'Buildings', hasSublayers: false },
+                  { id: 'surface', label: 'Surface & Roads', hasSublayers: true },
+                  { id: 'vegetation', label: 'Vegetation', hasSublayers: false },
+                  { id: 'infrastructure', label: 'Infrastructure', hasSublayers: false },
+                  { id: 'barriers', label: 'Barriers', hasSublayers: false },
+                  { id: 'topography', label: 'Topography', hasSublayers: false }
+                ].map(layer => {
+                  const isLayerVisible = layer.id === 'surface'
+                    ? (layerVisibility.surface as any)._group
+                    : (layerVisibility as any)[layer.id];
 
-                    return (
-                      <div key={layer.id} className="flex flex-col gap-1">
-                        <div className={`w-full flex items-center justify-between p-2 rounded-lg transition-all ${isLayerVisible ? 'bg-blue-600/20 text-blue-200' : 'bg-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>
-                          <div className="flex items-center gap-2 flex-1">
-                            {layer.hasSublayers && (
-                              <button
-                                onClick={() => setExpandedLayers(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))}
-                                className="p-1 hover:bg-white/10 rounded-full transition-colors"
-                              >
-                                {expandedLayers[layer.id] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                              </button>
-                            )}
-                            <span className="text-xs font-bold cursor-pointer" onClick={() => layer.hasSublayers && setExpandedLayers(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))}>
-                              {layer.label}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              if (layer.id === 'surface') {
-                                setLayerVisibility(prev => ({
-                                  ...prev,
-                                  surface: { ...prev.surface, _group: !prev.surface._group }
-                                }));
-                              } else {
-                                setLayerVisibility(prev => ({ ...prev, [layer.id]: !(prev as any)[layer.id] }));
-                              }
-                            }}
-                            className="p-1 hover:bg-white/10 rounded-full"
-                          >
-                            {isLayerVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                          </button>
+                  return (
+                    <div key={layer.id} className="flex flex-col gap-1">
+                      <div className={`w-full flex items-center justify-between p-2 rounded-lg transition-all ${isLayerVisible ? 'bg-blue-600/20 text-blue-200' : 'bg-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>
+                        <div className="flex items-center gap-2 flex-1">
+                          {layer.hasSublayers && (
+                            <button
+                              onClick={() => setExpandedLayers(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))}
+                              className="p-1 hover:bg-white/10 rounded-full transition-colors"
+                            >
+                              {expandedLayers[layer.id] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                            </button>
+                          )}
+                          <span className="text-xs font-bold cursor-pointer" onClick={() => layer.hasSublayers && setExpandedLayers(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))}>
+                            {layer.label}
+                          </span>
                         </div>
-
-                        {/* Sublayers Render */}
-                        {layer.hasSublayers && expandedLayers[layer.id] && layer.id === 'surface' && (
-                          <div className="pl-8 flex flex-col gap-1 pb-2 animate-in slide-in-from-top-2 duration-200">
-                            {Object.keys(COLORS.surface).filter(k => k !== 'default').concat(['default']).map(subKey => (
-                              <button
-                                key={subKey}
-                                onClick={() => setLayerVisibility(prev => ({
-                                  ...prev,
-                                  surface: { ...prev.surface, [subKey]: !prev.surface[subKey as keyof typeof prev.surface] }
-                                }))}
-                                className={`flex items-center justify-between p-1.5 rounded-md text-xs transition-colors ${layerVisibility.surface[subKey as keyof typeof layerVisibility.surface] ? 'text-slate-300 hover:bg-white/5' : 'text-slate-600'}`}
-                              >
-                                <span className="capitalize">{subKey.replace(/([A-Z])/g, ' $1').trim()}</span>
-                                <div
-                                  className={`w-2 h-2 rounded-full border border-white/10`}
-                                  style={{ backgroundColor: layerVisibility.surface[subKey as keyof typeof layerVisibility.surface] ? COLORS.surface[subKey as keyof typeof COLORS.surface] : '#334155' }}
-                                />
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        <button
+                          onClick={() => {
+                            if (layer.id === 'surface') {
+                              setLayerVisibility(prev => ({
+                                ...prev,
+                                surface: { ...prev.surface, _group: !prev.surface._group }
+                              }));
+                            } else {
+                              setLayerVisibility(prev => ({ ...prev, [layer.id]: !(prev as any)[layer.id] }));
+                            }
+                          }}
+                          className="p-1 hover:bg-white/10 rounded-full"
+                        >
+                          {isLayerVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                        </button>
                       </div>
-                    );
-                  })}
-                </div>
 
-
-
+                      {/* Sublayers Render */}
+                      {layer.hasSublayers && expandedLayers[layer.id] && layer.id === 'surface' && (
+                        <div className="pl-8 flex flex-col gap-1 pb-2 animate-in slide-in-from-top-2 duration-200">
+                          {Object.keys(COLORS.surface).filter(k => k !== 'default').concat(['default']).map(subKey => (
+                            <button
+                              key={subKey}
+                              onClick={() => setLayerVisibility(prev => ({
+                                ...prev,
+                                surface: { ...prev.surface, [subKey]: !prev.surface[subKey as keyof typeof prev.surface] }
+                              }))}
+                              className={`flex items-center justify-between p-1.5 rounded-md text-xs transition-colors ${layerVisibility.surface[subKey as keyof typeof layerVisibility.surface] ? 'text-slate-300 hover:bg-white/5' : 'text-slate-600'}`}
+                            >
+                              <span className="capitalize">{subKey.replace(/([A-Z])/g, ' $1').trim()}</span>
+                              <div
+                                className={`w-2 h-2 rounded-full border border-white/10`}
+                                style={{ backgroundColor: layerVisibility.surface[subKey as keyof typeof layerVisibility.surface] ? COLORS.surface[subKey as keyof typeof COLORS.surface] : '#334155' }}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
-              {/* Layer Toggle & View Controls */}
-              <div className="flex flex-col gap-2 pointer-events-auto relative">
+
+
+            </div>
+
+            {/* Layer Toggle & View Controls */}
+            <div className="flex flex-col gap-2 pointer-events-auto relative">
 
 
 
-                {/* Toggle Button */}
-                <button
-                  onClick={() => setShowLayers(!showLayers)}
-                  className="h-10 w-10 bg-slate-900/80 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all shadow-lg"
-                  title={showLayers ? "Collapse Layers" : "Expand Layers"}
-                >
-                  {showLayers ? <ChevronLeft className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
-                </button>
+              {/* Toggle Button */}
+              <button
+                onClick={() => setShowLayers(!showLayers)}
+                className="h-10 w-10 bg-slate-900/80 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all shadow-lg"
+                title={showLayers ? "Collapse Layers" : "Expand Layers"}
+              >
+                {showLayers ? <ChevronLeft className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
+              </button>
 
-                {/* Top View */}
-                <button
-                  onClick={handleTopView}
-                  className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${isTopView ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  title={isTopView ? "Restore Previous View" : "Top View"}
-                >
-                  <Square className="w-5 h-5" />
-                </button>
+              {/* Top View */}
+              <button
+                onClick={handleTopView}
+                className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${isTopView ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                title={isTopView ? "Restore Previous View" : "Top View"}
+              >
+                <Square className="w-5 h-5" />
+              </button>
 
-                {/* Reset View */}
-                <button
-                  onClick={handleReset}
-                  className="h-10 w-10 bg-slate-900/80 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all shadow-lg"
-                  title="Reset View"
-                >
-                  <RotateCcw className="w-5 h-5" />
-                </button>
+              {/* Reset View */}
+              <button
+                onClick={handleReset}
+                className="h-10 w-10 bg-slate-900/80 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all shadow-lg"
+                title="Reset View"
+              >
+                <RotateCcw className="w-5 h-5" />
+              </button>
 
-                {/* Visualize Path Button -> Emerald */}
-                <button
-                  onClick={() => setShowSolarPath(!showSolarPath)}
-                  className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${showSolarPath ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  title="Visualize Path"
-                >
-                  <Compass className="w-5 h-5" />
-                </button>
+              {/* Visualize Path Button -> Emerald */}
+              <button
+                onClick={() => setShowSolarPath(!showSolarPath)}
+                className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${showSolarPath ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                title="Visualize Path"
+              >
+                <Compass className="w-5 h-5" />
+              </button>
 
-                {/* --- Moved Mode Buttons --- */}
+              {/* --- Moved Mode Buttons --- */}
 
-                {/* 1. Default Shadows -> Emerald */}
-                <button
-                  onClick={() => setShowDefaultShadows(!showDefaultShadows)}
-                  disabled={isSunStudyEnabled}
-                  className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${showDefaultShadows && !isSunStudyEnabled ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'} ${isSunStudyEnabled ? 'opacity-30 cursor-not-allowed' : ''}`}
-                  title="Default Shadows"
-                >
-                  <Box className="w-5 h-5" />
-                </button>
+              {/* 1. Default Shadows -> Emerald */}
+              <button
+                onClick={() => setShowDefaultShadows(!showDefaultShadows)}
+                disabled={isSunStudyEnabled}
+                className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${showDefaultShadows && !isSunStudyEnabled ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'} ${isSunStudyEnabled ? 'opacity-30 cursor-not-allowed' : ''}`}
+                title="Default Shadows"
+              >
+                <Box className="w-5 h-5" />
+              </button>
 
-                {/* 2. Map Underlay -> Sky Blue */}
-                <button
-                  onClick={() => setShowMapUnderlay(!showMapUnderlay)}
-                  className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${showMapUnderlay ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  title="Map Underlay"
-                >
-                  <ImageIcon className="w-5 h-5" />
-                </button>
+              {/* 2. Map Underlay -> Sky Blue */}
+              <button
+                onClick={() => setShowMapUnderlay(!showMapUnderlay)}
+                className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${showMapUnderlay ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                title="Map Underlay"
+              >
+                <ImageIcon className="w-5 h-5" />
+              </button>
 
-                {/* 3. Sun Study -> Amber */}
-                <button
-                  onClick={() => {
-                    setIsSunStudyEnabled(!isSunStudyEnabled);
-                    if (isSunStudyEnabled) setIsClimateEnabled(false);
-                  }}
-                  className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${isSunStudyEnabled ? 'bg-amber-400 text-white hover:bg-amber-500' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  title="Sun Study"
-                >
-                  <Sun className="w-5 h-5" />
-                </button>
+              {/* 3. Sun Study -> Amber */}
+              <button
+                onClick={() => {
+                  setIsSunStudyEnabled(!isSunStudyEnabled);
+                  if (isSunStudyEnabled) setIsClimateEnabled(false);
+                }}
+                className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${isSunStudyEnabled ? 'bg-amber-400 text-white hover:bg-amber-500' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                title="Sun Study"
+              >
+                <Sun className="w-5 h-5" />
+              </button>
 
-                {/* 4. Climate -> Sky Blue */}
-                <button
-                  onClick={() => setIsClimateEnabled(!isClimateEnabled)}
-                  className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${isClimateEnabled ? 'bg-sky-400 text-white hover:bg-sky-500' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  title="Climate Data"
-                >
-                  <Wind className="w-5 h-5" />
-                </button>
-              </div>
+              {/* 4. Climate -> Sky Blue */}
+              <button
+                onClick={() => setIsClimateEnabled(!isClimateEnabled)}
+                className={`h-10 w-10 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center transition-all shadow-lg ${isClimateEnabled ? 'bg-sky-400 text-white hover:bg-sky-500' : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                title="Climate Data"
+              >
+                <Wind className="w-5 h-5" />
+              </button>
             </div>
           </div>
+        </div>
 
-          {/* Render Viewport */}
-          {activeTab === 'render' && (
-            <div className="absolute inset-0 flex items-center justify-center p-8 bg-slate-950">
+        {/* Render Viewport */}
+        {/* Render Viewport */}
+        <div className={`absolute inset-0 flex items-center justify-center p-8 bg-slate-950 transition-all duration-500 ease-in-out ${activeTab === 'render'
+          ? 'opacity-100 translate-y-0 pointer-events-auto z-20'
+          : 'opacity-0 translate-y-8 pointer-events-none z-0'
+          }`}>
 
-              {/* Prompt Editor Overlay */}
-              {showPromptEditor && (
-                <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-8 animate-in fade-in duration-200">
-                  <div className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl p-6 shadow-2xl flex flex-col gap-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <Edit2 className="w-4 h-4 text-purple-400" />
-                        Edit Render Prompt
-                      </h3>
-                      <button onClick={() => setShowPromptEditor(false)} className="text-slate-500 hover:text-white">
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <textarea
-                      value={tempPrompt}
-                      onChange={(e) => setTempPrompt(e.target.value)}
-                      className="w-full h-32 bg-slate-800 border border-white/10 rounded-xl p-4 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                      placeholder="Enter description..."
-                    />
-
-                    <div className="flex justify-end gap-3">
-                      <button
-                        onClick={() => setShowPromptEditor(false)}
-                        className="px-4 py-2 hover:bg-white/5 text-slate-400 rounded-lg text-xs font-bold"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSavePrompt}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold flex items-center gap-2"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        Save Prompt
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {isRendering ? (
-                <div className="relative w-full h-full flex items-center justify-center rounded-2xl overflow-hidden border border-white/10">
-                  {/* Immediate Preview Background */}
-                  {originalImageUrl && (
-                    <img
-                      src={originalImageUrl}
-                      className="absolute inset-0 w-full h-full object-cover opacity-50 blur-sm brightness-50"
-                      alt="Processing Preview"
-                    />
-                  )}
-
-                  <div className="flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-300 relative z-10">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full animate-pulse" />
-                      <Loader2 className="w-12 h-12 text-purple-500 animate-spin relative z-10" />
-                    </div>
-                    <div className="text-center">
-                      <h3 className="text-white font-bold text-lg">Rendering Scene...</h3>
-                      <p className="text-slate-400 text-sm">Powered by Google Gemini</p>
-                      {locationName && <p className="text-slate-500 text-xs mt-1">Context: {locationName}</p>}
-                    </div>
-                  </div>
-                </div>
-              ) : renderError ? (
-                <div className="text-center max-w-md p-6 bg-red-500/10 border border-red-500/20 rounded-2xl">
-                  <h3 className="text-red-400 font-bold mb-2">Rendering Failed</h3>
-                  <p className="text-slate-300 text-sm">{renderError}</p>
-                  <button
-                    onClick={handleRender}
-                    className="mt-4 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors"
-                  >
-                    Try Again
+          {/* Prompt Editor Overlay */}
+          {showPromptEditor && (
+            <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-8 animate-in fade-in duration-200">
+              <div className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl p-6 shadow-2xl flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Edit2 className="w-4 h-4 text-purple-400" />
+                    Edit Render Prompt
+                  </h3>
+                  <button onClick={() => setShowPromptEditor(false)} className="text-slate-500 hover:text-white">
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
-              ) : renderedImageUrl && originalImageUrl ? (
-                <div
-                  className="relative w-full h-full rounded-lg shadow-2xl border border-white/10 overflow-hidden cursor-ew-resize select-none"
-                  ref={sliderRef}
-                  onMouseMove={handleSliderMove}
-                  onTouchMove={handleSliderMove}
-                >
-                  {/* Original Image (Before) */}
-                  <img
-                    src={originalImageUrl}
-                    alt="Original View"
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                  <div className="absolute top-4 left-4 bg-black/50 backdrop-blur px-2 py-1 rounded text-[10px] font-bold text-white uppercase tracking-wider pointer-events-none">
-                    Original
-                  </div>
 
-                  {/* Rendered Image (After) - Clipped */}
-                  <div
-                    className="absolute inset-0 w-full h-full overflow-hidden"
-                    style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
-                  >
-                    <img
-                      src={renderedImageUrl}
-                      alt="Gemini Render"
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                    <div className="absolute top-4 right-4 bg-purple-600/80 backdrop-blur px-2 py-1 rounded text-[10px] font-bold text-white uppercase tracking-wider pointer-events-none">
-                      Gemini Render
-                    </div>
-                  </div>
+                <textarea
+                  value={tempPrompt}
+                  onChange={(e) => setTempPrompt(e.target.value)}
+                  className="w-full h-32 bg-slate-800 border border-white/10 rounded-xl p-4 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                  placeholder="Enter description..."
+                />
 
-                  {/* Slider Handle */}
-                  <div
-                    className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize z-20 shadow-[0_0_10px_rgba(0,0,0,0.5)]"
-                    style={{ left: `${sliderPosition}%` }}
-                  >
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center">
-                      <div className="flex gap-0.5">
-                        <div className="w-0.5 h-3 bg-slate-400"></div>
-                        <div className="w-0.5 h-3 bg-slate-400"></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Download Action */}
-                  <div className="absolute bottom-8 right-8 z-30">
-                    <a
-                      href={renderedImageUrl}
-                      download="gemini_render.png"
-                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-sm transition-colors shadow-lg"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Download className="w-4 h-4" />
-                      Save Render
-                    </a>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center text-slate-500">
-                  <ImageIcon className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                  <p>No render generated yet.</p>
+                <div className="flex justify-end gap-3">
                   <button
-                    onClick={handleRender}
-                    className="mt-4 text-purple-400 hover:text-purple-300 font-bold text-sm"
+                    onClick={() => setShowPromptEditor(false)}
+                    className="px-4 py-2 hover:bg-white/5 text-slate-400 rounded-lg text-xs font-bold"
                   >
-                    Start Render from 3D View
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSavePrompt}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold flex items-center gap-2"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Save Prompt
                   </button>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
+          {isRendering ? (
+            <div className="relative w-full h-full flex items-center justify-center rounded-2xl overflow-hidden border border-white/10">
+              {/* Immediate Preview Background */}
+              {originalImageUrl && (
+                <img
+                  src={originalImageUrl}
+                  className="absolute inset-0 w-full h-full object-cover opacity-50 blur-sm brightness-50"
+                  alt="Processing Preview"
+                />
+              )}
+
+              <div className="flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-300 relative z-10">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full animate-pulse" />
+                  <Loader2 className="w-12 h-12 text-purple-500 animate-spin relative z-10" />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-white font-bold text-lg">Rendering Scene...</h3>
+                  <p className="text-slate-400 text-sm">Powered by Google Gemini</p>
+                  {locationName && <p className="text-slate-500 text-xs mt-1">Context: {locationName}</p>}
+                </div>
+              </div>
+            </div>
+          ) : renderError ? (
+            <div className="text-center max-w-md p-6 bg-red-500/10 border border-red-500/20 rounded-2xl">
+              <h3 className="text-red-400 font-bold mb-2">Rendering Failed</h3>
+              <p className="text-slate-300 text-sm">{renderError}</p>
+              <button
+                onClick={handleRender}
+                className="mt-4 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : renderedImageUrl && originalImageUrl ? (
+            <div
+              className="relative w-full h-full rounded-lg shadow-2xl border border-white/10 overflow-hidden cursor-ew-resize select-none"
+              ref={sliderRef}
+              onMouseMove={handleSliderMove}
+              onTouchMove={handleSliderMove}
+            >
+              {/* Original Image (Before) */}
+              <img
+                src={originalImageUrl}
+                alt="Original View"
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+              <div className="absolute top-4 left-4 bg-black/50 backdrop-blur px-2 py-1 rounded text-[10px] font-bold text-white uppercase tracking-wider pointer-events-none">
+                Original
+              </div>
+
+              {/* Rendered Image (After) - Clipped */}
+              <div
+                className="absolute inset-0 w-full h-full overflow-hidden"
+                style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+              >
+                <img
+                  src={renderedImageUrl}
+                  alt="Gemini Render"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute top-4 right-4 bg-purple-600/80 backdrop-blur px-2 py-1 rounded text-[10px] font-bold text-white uppercase tracking-wider pointer-events-none">
+                  Gemini Render
+                </div>
+              </div>
+
+              {/* Slider Handle */}
+              <div
+                className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize z-20 shadow-[0_0_10px_rgba(0,0,0,0.5)]"
+                style={{ left: `${sliderPosition}%` }}
+              >
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center">
+                  <div className="flex gap-0.5">
+                    <div className="w-0.5 h-3 bg-slate-400"></div>
+                    <div className="w-0.5 h-3 bg-slate-400"></div>
+                  </div>
+                </div>
+              </div>
+
+
+            </div>
+          ) : (
+            <div className="text-center text-slate-500">
+              <ImageIcon className="w-16 h-16 mx-auto mb-4 opacity-20" />
+              <p>No render generated yet.</p>
+              <button
+                onClick={handleRender}
+                className="mt-4 text-purple-400 hover:text-purple-300 font-bold text-sm"
+              >
+                Start Render from 3D View
+              </button>
+            </div>
+          )}
         </div>
-
-        {/* Footer */}
-        <div className="h-[88px] px-6 border-t border-white/5 bg-slate-900/50 backdrop-blur-sm flex justify-between items-center shrink-0">
-          <div className="flex flex-col gap-1 w-auto min-w-[300px] -mt-2">
+      </div>
 
 
-            {/* Stats Display - Always Visible on Left */}
-            {/* Time Controls (Left Footer) - Replaces Stats */}
-            <div className="flex flex-col gap-5 w-[280px]">
-              <div className="flex justify-between items-center px-1 -mt-1 translate-y-px">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Time: <span className="text-white">{Math.floor(timeOfDay).toString().padStart(2, '0')}:{(Math.floor((timeOfDay % 1) * 60)).toString().padStart(2, '0')}</span>
+
+      {/* Footer */}
+      <div
+        className="h-[88px] px-6 border-t border-white/5 bg-slate-900/50 backdrop-blur-sm shrink-0 transition-all duration-500 relative group overflow-hidden"
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          e.currentTarget.style.setProperty('--x', `${e.clientX - rect.left}px`);
+          e.currentTarget.style.setProperty('--y', `${e.clientY - rect.top}px`);
+        }}
+      >
+        <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          style={{ background: 'radial-gradient(800px circle at var(--x) var(--y), rgba(255,255,255,0.06), transparent 40%)' }} />
+        <div className="relative z-10 w-full h-full flex justify-between items-center">
+
+          {/* LEFT SECTION */}
+          <div className="flex items-center h-full">
+            {/* MODE SWITCHER BUTTON - Styled like screenshot with Spotlight & Hover */}
+            <button
+              onClick={() => {
+                if (activeTab === '3d') {
+                  if (rendererRef.current && sceneRef.current && cameraRef.current) {
+                    rendererRef.current.render(sceneRef.current, cameraRef.current);
+                    const dataUrl = rendererRef.current.domElement.toDataURL('image/png');
+                    setOriginalImageUrl(dataUrl);
+                  }
+                  setActiveTab('render');
+                } else {
+                  setActiveTab('3d');
+                }
+              }}
+              onMouseMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                e.currentTarget.style.setProperty('--x', `${e.clientX - rect.left}px`);
+                e.currentTarget.style.setProperty('--y', `${e.clientY - rect.top}px`);
+              }}
+              className="h-full w-[160px] flex items-center justify-center text-white mr-14 relative group cursor-pointer bg-transparent outline-none"
+              style={{
+                marginLeft: '-24px',
+                zIndex: 10
+              } as React.CSSProperties}
+            >
+              {/* Unified Background Shape with Spotlight */}
+              {/* Width 184px = 160px (main) + 24px (tail). Height 88px. */}
+              <div
+                className="absolute inset-y-0 left-0 w-[184px] bg-slate-800 group-hover:bg-slate-700 transition-colors duration-300"
+                style={{
+                  clipPath: "path('M 0 0 H 136 Q 160 0 160 24 V 64 Q 160 88 184 88 H 0 Z')",
+                  zIndex: -1
+                }}
+              >
+                {/* Spotlight Overlay - masked by parent clip-path */}
+                <div
+                  className="absolute inset-0 transition-opacity duration-300 opacity-0 group-hover:opacity-100 pointer-events-none"
+                  style={{
+                    background: 'radial-gradient(120px circle at var(--x) var(--y), rgba(255,255,255,0.15), transparent 60%)'
+                  }}
+                />
+              </div>
+
+              <span className="text-xl font-light tracking-wide opacity-90 group-hover:opacity-100 transition-opacity z-10 relative pointer-events-none">
+                {activeTab === '3d' ? 'Render' : '3D View'}
+              </span>
+            </button>
+
+            <div className={`flex items-center gap-4 h-full overflow-hidden transition-all duration-500 ease-in-out ${activeTab === '3d' ? 'w-[600px] opacity-100 translate-x-0' : 'w-0 opacity-0 -translate-x-10 pointer-events-none'
+              }`}>
+              <div className="min-w-[600px] flex items-center gap-4 h-full">
+
+                {/* Time Label */}
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                  Time: <span className="text-white bg-slate-800 px-2 py-1 rounded ml-1 border border-white/5">{Math.floor(timeOfDay).toString().padStart(2, '0')}:{(Math.floor((timeOfDay % 1) * 60)).toString().padStart(2, '0')}</span>
                 </span>
+
+                {/* Slider */}
+                <input
+                  type="range"
+                  min="6"
+                  max="20"
+                  step="0.1"
+                  value={timeOfDay}
+                  onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
+                  className={`flex-1 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:scale-110 transition-all ${isSunStudyEnabled ? '[&::-webkit-slider-thumb]:bg-amber-500' : isClimateEnabled ? '[&::-webkit-slider-thumb]:bg-sky-500' : '[&::-webkit-slider-thumb]:bg-slate-400'}`}
+                />
+
+                {/* Buttons */}
                 <div className="flex gap-1.5">
                   {[
-                    { label: 'Morning', value: 8, icon: <Sun className="w-4 h-4" /> },
-                    { label: 'Noon', value: 12, icon: <Sun className="w-4 h-4 text-amber-400" /> },
-                    { label: 'Sunset', value: 17.5, icon: <Sun className="w-4 h-4 text-orange-500" /> },
-                    { label: 'Night', value: 22, icon: <Sun className="w-4 h-4 text-blue-400" /> }
+                    { label: 'Morning', value: 8, icon: <Sun className="w-5 h-5" /> },
+                    { label: 'Noon', value: 12, icon: <Sun className="w-5 h-5 text-amber-400" /> },
+                    { label: 'Sunset', value: 17.5, icon: <Sun className="w-5 h-5 text-orange-500" /> },
+                    { label: 'Night', value: 22, icon: <Sun className="w-5 h-5 text-blue-400" /> }
                   ].map(preset => (
                     <button
                       key={preset.label}
@@ -1902,67 +1927,71 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
                         setTimeOfDay(preset.value);
                         if (!isSunStudyEnabled) setIsSunStudyEnabled(true);
                       }}
-                      className="p-1 rounded-md bg-slate-800 border border-white/10 hover:bg-slate-700 transition-all text-slate-400 hover:text-white"
+                      className="p-2 rounded-lg bg-slate-800 border border-white/10 hover:bg-slate-700 hover:scale-105 transition-all text-slate-400 hover:text-white shadow-sm"
                       title={`Set to ${preset.label}`}
                     >
                       {preset.icon}
                     </button>
                   ))}
+                  <div className="w-px h-8 bg-white/10 mx-1"></div>
                   <button
                     onClick={() => setIsSimulatingSun(!isSimulatingSun)}
-                    className={`p-1 rounded-md border transition-all ${isSimulatingSun
+                    className={`p-2 rounded-lg border transition-all shadow-sm ${isSimulatingSun
                       ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                      : 'bg-slate-800 border-white/10 text-slate-400 hover:text-white'
+                      : 'bg-slate-800 border-white/10 text-slate-400 hover:text-white hover:bg-slate-700'
                       }`}
                     title={isSimulatingSun ? "Pause Sun Simulation" : "Simulate Sun Cycle"}
                   >
-                    {isSimulatingSun ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {isSimulatingSun ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                   </button>
                   <button
                     onClick={() => setAutoRotate(!autoRotate)}
-                    className={`p-1 rounded-md border transition-all ${autoRotate
+                    className={`p-2 rounded-lg border transition-all shadow-sm ${autoRotate
                       ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                      : 'bg-slate-800 border-white/10 text-slate-400 hover:text-white'
+                      : 'bg-slate-800 border-white/10 text-slate-400 hover:text-white hover:bg-slate-700'
                       }`}
                     title="Auto Rotate"
                   >
-                    <RotateCcw className={`w-4 h-4 ${autoRotate ? 'animate-spin-slow' : ''}`} />
+                    <RotateCcw className={`w-5 h-5 ${autoRotate ? 'animate-spin-slow' : ''}`} />
                   </button>
                 </div>
               </div>
-              <input
-                type="range"
-                min="6"
-                max="20"
-                step="0.1"
-                value={timeOfDay}
-                onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
-                className={`w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer mt-1 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:scale-110 transition-all ${isSunStudyEnabled ? '[&::-webkit-slider-thumb]:bg-amber-500' : isClimateEnabled ? '[&::-webkit-slider-thumb]:bg-sky-500' : '[&::-webkit-slider-thumb]:bg-slate-400'}`}
-              />
             </div>
+
           </div>
 
-          {/* Center: Climate Information (Empty space filled when active) */}
+          {/* CENTER SECTION (Climate Info - Only in 3D Mode) */}
           <div className="flex-1 flex justify-center">
-            {isClimateEnabled && climateData && (
+            {activeTab === '3d' && isClimateEnabled && climateData && (
               (() => {
                 const hourIndex = Math.round(timeOfDay) % 24;
                 const currentData = climateData.hourly[hourIndex] || climateData.current;
                 return (
-                  <div className="flex items-center gap-3 animate-in fade-in zoom-in duration-300 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 shadow-lg">
-                    <div className="flex items-center gap-1.5">
-                      <Thermometer className="w-3.5 h-3.5 text-orange-400" />
-                      <span className="text-white font-bold text-xs">{currentData.temperature}°C</span>
-                    </div>
-                    <div className="w-px h-3 bg-white/10"></div>
-                    <div className="flex items-center gap-1.5">
-                      <Wind className="w-3.5 h-3.5 text-blue-400" />
-                      <span className="text-white font-bold text-xs">{currentData.windSpeed} km/h</span>
-                    </div>
-                    <div className="w-px h-3 bg-white/10"></div>
-                    <div className="flex items-center gap-1.5">
-                      <Compass className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-white font-bold text-xs">{getWindDirectionLabel(currentData.windDirection)} ({currentData.windDirection}°)</span>
+                  <div
+                    className="flex items-center gap-6 animate-in fade-in zoom-in duration-300 bg-slate-900/80 backdrop-blur-md px-6 py-[10px] rounded-2xl border border-white/10 shadow-lg h-[42px] relative group overflow-hidden"
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      e.currentTarget.style.setProperty('--x', `${e.clientX - rect.left}px`);
+                      e.currentTarget.style.setProperty('--y', `${e.clientY - rect.top}px`);
+                    }}
+                  >
+                    <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      style={{ background: 'radial-gradient(200px circle at var(--x) var(--y), rgba(255,255,255,0.1), transparent 40%)' }} />
+                    <div className="relative z-10 flex items-center gap-6 h-full">
+                      <div className="flex items-center gap-2.5">
+                        <Thermometer className="w-5 h-5 text-orange-400" />
+                        <span className="text-white font-bold text-sm">{currentData.temperature}°C</span>
+                      </div>
+                      <div className="w-px h-5 bg-white/10"></div>
+                      <div className="flex items-center gap-2.5">
+                        <Wind className="w-5 h-5 text-blue-400" />
+                        <span className="text-white font-bold text-sm">{currentData.windSpeed} km/h</span>
+                      </div>
+                      <div className="w-px h-5 bg-white/10"></div>
+                      <div className="flex items-center gap-2.5">
+                        <Compass className="w-5 h-5 text-emerald-400" />
+                        <span className="text-white font-bold text-sm">{getWindDirectionLabel(currentData.windDirection)} ({currentData.windDirection}°)</span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1971,70 +2000,119 @@ const ModelPreview: React.FC<ModelPreviewProps> = ({
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Model Choice & Render - Moved to Footer, only show in 3D tab or Render tab if needed */}
-            {nanoBananaApiKey && (
-              <div className="flex shadow-lg rounded-xl">
-                <div className="relative group">
-                  <select
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value as GeminiModel)}
-                    className="appearance-none bg-slate-900/80 backdrop-blur-md pl-4 pr-8 py-3 rounded-l-xl border border-white/10 text-white font-bold text-xs uppercase tracking-wider hover:bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
-                    title="Select Rendering Model"
+            <div className={`overflow-hidden transition-all duration-500 ease-in-out ${activeTab === 'render' ? 'max-w-[600px] opacity-100 translate-x-0 ml-4' : 'max-w-0 opacity-0 translate-x-10 pointer-events-none'
+              }`}>
+              <div className="flex items-center gap-4 min-w-max">
+                {/* PROMPT BUTTON - SEPARATED */}
+                <div className="flex shadow-lg rounded-xl">
+                  <button
+                    onClick={handleOpenPromptEditor}
+                    className="px-4 py-3 bg-slate-800/80 backdrop-blur-md rounded-xl border border-white/10 text-slate-300 font-bold text-xs uppercase tracking-wider hover:bg-white/10 transition-all flex items-center gap-2"
+                    title="Edit Prompt"
                   >
-                    <option value="gemini-3-pro-image-preview" className="bg-slate-900 text-white">Gemini 3 Pro</option>
-                    <option value="gemini-2.5-flash-image" className="bg-slate-900 text-white">Gemini 2.5 Flash</option>
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <Edit2 className="w-3.5 h-3.5" />
+                    Prompt
+                  </button>
                 </div>
 
-                {/* Quality Selector - Only for Gemini 3 Pro */}
-                {selectedModel === 'gemini-3-pro-image-preview' && (
-                  <div className="relative group border-y border-l border-white/10">
+                <div className="flex shadow-lg rounded-xl">
+                  <div className="relative group">
+                    {/* ... model select ... */}
                     <select
-                      value={renderQuality}
-                      onChange={(e) => setRenderQuality(e.target.value as any)}
-                      className="appearance-none bg-slate-900/80 backdrop-blur-md pl-3 pr-8 py-3 outline-none text-white font-bold text-xs hover:bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer h-full"
-                      title="Select Render Quality"
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value as GeminiModel)}
+                      className="appearance-none bg-slate-900/80 backdrop-blur-md pl-4 pr-8 py-3 rounded-l-xl border border-white/10 text-white font-bold text-xs uppercase tracking-wider hover:bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
+                      title="Select Rendering Model"
                     >
-                      <option value="1K" className="bg-slate-900 text-white">1K</option>
-                      <option value="2K" className="bg-slate-900 text-white">2K</option>
-                      <option value="4K" className="bg-slate-900 text-white">4K</option>
+                      <option value="gemini-3-pro-image-preview" className="bg-slate-900 text-white">Gemini 3 Pro</option>
+                      <option value="gemini-2.5-flash-image" className="bg-slate-900 text-white">Gemini 2.5 Flash</option>
                     </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
-                )}
 
-                <button
-                  onClick={handleRender}
-                  className="bg-purple-600/90 backdrop-blur-md px-4 py-3 rounded-r-xl border-l border-white/10 text-white font-bold text-xs uppercase tracking-wider hover:bg-purple-500 transition-all flex items-center gap-2"
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  Render
-                </button>
+                  {/* Quality Selector - Only for Gemini 3 Pro */}
+                  {selectedModel === 'gemini-3-pro-image-preview' && (
+                    <div className="relative group border-y border-l border-white/10">
+                      <select
+                        value={renderQuality}
+                        onChange={(e) => setRenderQuality(e.target.value as any)}
+                        className="appearance-none bg-slate-900/80 backdrop-blur-md pl-3 pr-8 py-3 outline-none text-white font-bold text-xs hover:bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer h-full"
+                        title="Select Render Quality"
+                      >
+                        <option value="1K" className="bg-slate-900 text-white">1K</option>
+                        <option value="2K" className="bg-slate-900 text-white">2K</option>
+                        <option value="4K" className="bg-slate-900 text-white">4K</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleRender}
+                    className="bg-purple-600/90 backdrop-blur-md px-6 py-3 rounded-r-xl border-l border-white/10 text-white font-bold text-xs uppercase tracking-wider hover:bg-purple-500 transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(147,51,234,0.3)] hover:shadow-[0_0_25px_rgba(147,51,234,0.5)]"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    Generate Render
+                  </button>
+                </div>
+
+                {/* Back to 3D View Button - REMOVED (Moved to left) */}
+
               </div>
-            )}
+            </div>
 
             <button
-              onClick={onConfirmDownload}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-6 py-3 bg-white text-slate-900 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-blue-50 transition-colors shadow-lg shadow-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (activeTab === 'render' && renderedImageUrl) {
+                  // Download Rendered Image
+                  const link = document.createElement('a');
+                  link.href = renderedImageUrl;
+                  link.download = `render_${new Date().getTime()}.png`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                } else if (activeTab === 'render' && originalImageUrl) {
+                  // Download Screenshot if no AI render yet
+                  const link = document.createElement('a');
+                  link.href = originalImageUrl;
+                  link.download = `screenshot_${new Date().getTime()}.png`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                } else {
+                  // Default Model Download
+                  onConfirmDownload();
+                }
+              }}
+              disabled={isLoading && activeTab !== 'render'}
+              className="group/btn relative flex items-center justify-center gap-2 w-[200px] py-3 bg-white text-slate-900 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-blue-50 transition-colors shadow-lg shadow-white/5 disabled:opacity-80 disabled:cursor-not-allowed overflow-hidden"
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  Download Model
-                </>
+              {/* Download Progress Bar Overlay */}
+              {downloadProgress > 0 && downloadProgress < 100 && (
+                <div
+                  className="absolute inset-0 bg-emerald-300/80 transition-[width] duration-300 ease-out z-0"
+                  style={{ width: `${downloadProgress}%` }}
+                />
               )}
+
+              <div className="relative z-10 flex items-center gap-2">
+                {isLoading && activeTab !== 'render' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {downloadProgress > 0 ? `Downloading ${Math.round(downloadProgress)}%` : 'Processing...'}
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
+                    {activeTab === 'render' ? 'Download Image' : 'Download Model'}
+                  </>
+                )}
+              </div>
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
 

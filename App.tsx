@@ -11,7 +11,8 @@ import {
   Eye,
   EyeOff,
   FolderOpen,
-  ExternalLink
+  ExternalLink,
+  Box
 } from 'lucide-react';
 import { AppSettings, ExportFormat, AppStatus, CityweftPayload } from './types';
 import { requestCityweftData, downloadFile, fetchGeometryJson, GeometryResponse, reverseGeocode } from './services/api';
@@ -210,6 +211,7 @@ const App: React.FC = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   // Preview modal state
   const [showPreview, setShowPreview] = useState(false);
@@ -814,8 +816,30 @@ const App: React.FC = () => {
     if (event.target) event.target.value = '';
   };
 
+  const [activeTab, setActiveTab] = useState<'map' | 'model'>('map');
+
+  const handleTabChange = (tab: 'map' | 'model') => {
+    if (tab === 'model') {
+      handlePreview();
+    }
+    setActiveTab(tab);
+  };
+
+  // Update effect to sync tab with preview state if needed, but managing explicitly is better.
+  // We'll let handlePreview set showPreview=true, but we want to render it as a TAB, not a Modal.
+  // So we'll use activeTab to decide what to render in the main area.
+
+  // When activeTab is 'model', we want to ensure data is loaded.
+  // handlePreview does that.
+
+  // Refactored handlePreviewForTab
+  const handleSwitchToModelTab = () => {
+    setActiveTab('model');
+    handlePreview();
+  };
+
   return (
-    <div className="relative h-screen w-screen bg-[#020617] flex overflow-hidden selection:bg-blue-500/30">
+    <div className="relative h-screen w-screen bg-[#020617] flex flex-col overflow-hidden selection:bg-blue-500/30">
       <input
         type="file"
         ref={fileInputRef}
@@ -823,10 +847,90 @@ const App: React.FC = () => {
         className="hidden"
         accept=".json"
       />
-      {/* Floating Search Hub */}
-      <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[1400] w-[440px] h-12 pointer-events-none" ref={searchRef}>
-        <div className="glass-panel rounded-[32px] p-1 flex items-center shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] pointer-events-auto transition-all duration-500 hover:ring-2 hover:ring-blue-500/20 focus-within:ring-2 focus-within:ring-blue-500/50">
-          <div className="flex items-center gap-3 px-3 py-1.5 flex-grow min-w-0">
+
+      {/* Right Edge Navigation Slide-out */}
+      {/* Right Edge Navigation Slide-out */}
+      <div
+        className="fixed right-0 top-1/4 bottom-1/4 w-20 z-[4000] group flex items-center"
+      >
+        {/* Invisible Trigger Zone constrained to the center area */}
+        <div className="absolute right-0 top-0 bottom-0 w-full" />
+
+        {/* The Sidebar Content */}
+        <div
+          ref={sidebarRef}
+          onClick={() => handleTabChange(activeTab === 'map' ? 'model' : 'map')}
+          className="fixed right-0 h-[400px] w-16 cursor-pointer transition-transform duration-300 translate-x-[110%] group-hover:translate-x-0 flex items-center justify-center will-change-transform"
+          style={{
+            top: 'calc(50% - 200px)', // Initial center
+            // Custom property for spotlight
+            // @ts-ignore
+            '--x': '50%',
+            '--y': '50%'
+          }}
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            e.currentTarget.style.setProperty('--x', `${x}px`);
+            e.currentTarget.style.setProperty('--y', `${y}px`);
+          }}
+        >
+          {/* Glass Background Layer with Clip Path */}
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-md transition-colors"
+            style={{
+              clipPath: "path('M 64 0 Q 64 32 32 32 A 32 32 0 0 0 0 64 L 0 336 A 32 32 0 0 0 32 368 Q 64 368 64 400 L 64 0 Z')"
+            }}
+          />
+
+          {/* Spotlight Effect Layer */}
+          <div
+            className="absolute inset-0 transition-opacity duration-300 opacity-0 group-hover:opacity-100 pointer-events-none"
+            style={{
+              clipPath: "path('M 64 0 Q 64 32 32 32 A 32 32 0 0 0 0 64 L 0 336 A 32 32 0 0 0 32 368 Q 64 368 64 400 L 64 0 Z')",
+              background: 'radial-gradient(80px circle at var(--x) var(--y), rgba(255,255,255,0.4), transparent 100%)'
+            }}
+          />
+
+          {/* Border Overlay Layer */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 64 400">
+            <path
+              d="M 64 0 Q 64 32 32 32 A 32 32 0 0 0 0 64 L 0 336 A 32 32 0 0 0 32 368 Q 64 368 64 400"
+              fill="none"
+              stroke="rgba(255,255,255,0.3)"
+              strokeWidth="1.2"
+            />
+          </svg>
+
+          {/* Text Content */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-xl font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-white transition-colors whitespace-nowrap rotate-[-90deg]">
+              {activeTab === 'map' ? 'Model Viewer' : `Map Viewer`}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search Bar - Animated Transition */}
+      <div
+        className={`fixed top-8 left-1/2 -translate-x-1/2 z-[1400] w-[440px] h-12 transition-all duration-500 ease-in-out ${activeTab === 'map'
+          ? 'opacity-100 translate-y-0 pointer-events-auto'
+          : 'opacity-0 -translate-y-full pointer-events-none'
+          }`}
+        ref={searchRef}
+      >
+        <div
+          className="glass-panel rounded-[32px] p-1 flex items-center shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] transition-all duration-500 hover:ring-2 hover:ring-blue-500/20 focus-within:ring-2 focus-within:ring-blue-500/50 relative group overflow-hidden"
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            e.currentTarget.style.setProperty('--x', `${e.clientX - rect.left}px`);
+            e.currentTarget.style.setProperty('--y', `${e.clientY - rect.top}px`);
+          }}
+        >
+          <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            style={{ background: 'radial-gradient(400px circle at var(--x) var(--y), rgba(255,255,255,0.08), transparent 40%)' }} />
+          <div className="relative z-10 flex items-center gap-3 px-3 py-1.5 flex-grow min-w-0">
             {isSearching ? <Loader2 className="w-5 h-5 text-blue-400 animate-spin" /> : <Search className="w-5 h-5 text-slate-500" />}
             <input
               type="text"
@@ -841,7 +945,7 @@ const App: React.FC = () => {
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1 px-1 border-l border-white/5">
+          <div className="relative z-10 flex items-center gap-1 px-1 border-l border-white/5">
             <button
               onClick={() => {
                 navigator.geolocation.getCurrentPosition((pos) => {
@@ -856,41 +960,57 @@ const App: React.FC = () => {
         </div>
 
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute top-[60px] left-0 w-[440px] glass-panel !bg-slate-800/90 rounded-[24px] overflow-hidden shadow-2xl pointer-events-auto border border-white/10 animate-in fade-in slide-in-from-top-4 duration-500">
-            {suggestions.map((item, index) => (
-              <button
-                key={index}
-                onClick={() => handleSelectLocation(item.lat, item.lon, item.display_name)}
-                className="w-full text-left px-6 py-4 hover:bg-blue-500/10 transition-colors flex flex-col group border-b border-white/5 last:border-none"
-              >
-                <div className="flex flex-col min-w-0">
-                  <span className="text-sm text-white font-bold truncate group-hover:text-blue-400 transition-colors">{item.display_name}</span>
-                  <span className="text-[10px] text-slate-500 uppercase tracking-widest font-black mt-1 group-hover:text-blue-400/70 transition-colors">{item.type || 'Location'}</span>
-                </div>
-              </button>
-            ))}
+          <div
+            className="absolute top-[60px] left-0 w-[440px] glass-panel !bg-slate-800/90 rounded-[24px] overflow-hidden shadow-2xl pointer-events-auto border border-white/10 animate-in fade-in slide-in-from-top-4 duration-500 group"
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              e.currentTarget.style.setProperty('--x', `${e.clientX - rect.left}px`);
+              e.currentTarget.style.setProperty('--y', `${e.clientY - rect.top}px`);
+            }}
+          >
+            <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              style={{ background: 'radial-gradient(600px circle at var(--x) var(--y), rgba(255,255,255,0.06), transparent 40%)' }} />
+            <div className="relative z-10">
+              {suggestions.map((item, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleSelectLocation(item.lat, item.lon, item.display_name)}
+                  className="w-full text-left px-6 py-4 hover:bg-blue-500/10 transition-colors flex flex-col group border-b border-white/5 last:border-none"
+                >
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm text-white font-bold truncate group-hover:text-blue-400 transition-colors">{item.display_name}</span>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-black mt-1 group-hover:text-blue-400/70 transition-colors">{item.type || 'Location'}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
-      <ControlPanel
-        settings={settings}
-        setSettings={setSettings}
-        exportConfig={exportConfig}
-        setExportConfig={setExportConfig}
-        status={status}
-        progress={progress}
-        errorMessage={errorMessage}
-        onDownload={handleDownload}
-        onPreview={handlePreview}
-        selectedArea={areaKm2}
-        onClearSelection={handleClearSelection}
-        canDownload={!!selectedPolygon && areaKm2 > 0 && areaKm2 <= 5 && !!apiKey}
-        onOpenApiKeyModal={() => setShowApiModal(true)}
-        hasApiKey={!!apiKey}
-        onFileUpload={handleFileUpload}
-        onDownloadOSM={handleDownloadOSM}
-      />
+      {/* Control Panel - Only show in Map Mode */}
+      {/* Control Panel - Slide Transition */}
+      <div className={`fixed inset-0 z-[1100] pointer-events-none transition-transform duration-700 ease-in-out ${activeTab === 'map' ? 'translate-x-0' : '-translate-x-full'
+        }`}>
+        <ControlPanel
+          settings={settings}
+          setSettings={setSettings}
+          exportConfig={exportConfig}
+          setExportConfig={setExportConfig}
+          status={status}
+          progress={progress}
+          errorMessage={errorMessage}
+          onDownload={handleDownload}
+          onPreview={handleSwitchToModelTab}
+          selectedArea={areaKm2}
+          onClearSelection={handleClearSelection}
+          canDownload={!!selectedPolygon && areaKm2 > 0 && areaKm2 <= 5 && !!apiKey}
+          onOpenApiKeyModal={() => setShowApiModal(true)}
+          hasApiKey={!!apiKey}
+          onFileUpload={handleFileUpload}
+          onDownloadOSM={handleDownloadOSM}
+        />
+      </div>
 
       {/* API Key Modal */}
       <ApiKeyModal
@@ -904,28 +1024,38 @@ const App: React.FC = () => {
         onSelectDownloadFolder={handleSelectDownloadFolder}
       />
 
-      {/* Model Preview Modal */}
-      <ModelPreview
-        isOpen={showPreview}
-        onClose={() => {
-          setShowPreview(false);
-        }}
-        geometryData={previewData}
-        onConfirmDownload={handleDownloadFromPreview}
-        isLoading={isLoadingPreview}
-        nanoBananaApiKey={nanoBananaApiKey}
-        locationName={locationInfo?.fullName || searchQuery}
-        onRenderComplete={handleSaveRender}
-      />
+      {/* Viewport Area */}
+      <main className="flex-grow relative h-full w-full">
+        {/* Map Viewer is always rendered but hidden when not active to preserve state/tiles if desired. 
+            However, for performance, we might want to unmount it? 
+            Mapbox GL contexts are heavy. But re-initializing is also slow and resets view.
+            Let's keep it mounted but hidden with CSS. 
+        */}
+        <div className={`absolute inset-0 w-full h-full ${activeTab === 'map' ? 'visible z-10' : 'invisible -z-10'}`}>
+          <MapViewer
+            onPolygonChange={handlePolygonChange}
+            flyTo={mapFlyTo}
+            clearTrigger={clearTrigger}
+            externalPolygon={selectedPolygon}
+            locationName={locationInfo?.shortName || null}
+          />
+        </div>
 
-      <main className="flex-grow relative h-full">
-        <MapViewer
-          onPolygonChange={handlePolygonChange}
-          flyTo={mapFlyTo}
-          clearTrigger={clearTrigger}
-          externalPolygon={selectedPolygon}
-          locationName={locationInfo?.shortName || null}
-        />
+        {activeTab === 'model' && (
+          <div className="absolute inset-0 w-full h-full z-20 bg-slate-950 animate-in fade-in duration-500">
+            <ModelPreview
+              isOpen={true} // Always open when tab is active
+              onClose={() => setActiveTab('map')}
+              geometryData={previewData}
+              onConfirmDownload={handleDownloadFromPreview}
+              isLoading={isLoadingPreview || status === AppStatus.DOWNLOADING || status === AppStatus.PREPARING}
+              downloadProgress={progress}
+              nanoBananaApiKey={nanoBananaApiKey}
+              locationName={locationInfo?.fullName || searchQuery}
+              onRenderComplete={handleSaveRender}
+            />
+          </div>
+        )}
       </main>
     </div>
   );
